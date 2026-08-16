@@ -2,6 +2,9 @@
 set -eu
 
 if [ "${1:-}" = nextest ]; then
+    case "$*" in
+        'nextest run --help'|'nextest list --help') exec "${BUCK2_NEXTEST_REAL_CARGO:?}" "$@" ;;
+    esac
     printf 'top-level cargo nextest dispatch\n' >>"${BUCK2_NEXTEST_DISPATCH_LOG:?}"
     exec "${BUCK2_NEXTEST_REAL_CARGO:?}" "$@"
 fi

@@ -15,7 +15,8 @@ Run on a Unix-like host with these tools already installed and available on
 - Cargo 1.78 or newer (the checked-in lockfile uses format 4);
 - `cargo-nextest` 0.9.143 in the captured environment, exposing
   `--cargo-metadata`, `--binaries-metadata`, `--target-dir-remap`,
-  `--workspace-remap`, `--build-dir-remap`, and `--filterset`;
+  `--workspace-remap`, `--build-dir-remap`, `--filterset`,
+  `--success-output`, and `--failure-output`;
 - Python 3 for baseline, manifest, and scenario development/test tooling.
 
 No toolchain provisioning is included. The legacy adapter sets
@@ -42,24 +43,28 @@ buck2 test --test-executor-stdout=- --test-executor-stderr=- //:nextest_buck_art
 ```
 
 The native target is one executable with `pass_case` and `fail_case`. The
-adapter consumes its declared Buck output, validates the manifest before the
-nextest marker, computes matching SHA-256 digests for the Buck output and
-staged executable, synthesizes Cargo-shaped metadata, and invokes:
+adapter consumes its declared Buck output, stages one static manifest-declared
+runtime data file, applies the manifest-driven cwd and environment, validates
+the manifest before dispatch, computes matching SHA-256 digests for the Buck
+output and staged executable, synthesizes Cargo-shaped metadata, and invokes:
 
 ```text
 cargo nextest list --cargo-metadata ... --binaries-metadata ... \
   --target-dir-remap ... --workspace-remap ... --build-dir-remap ...
-cargo nextest run --filterset test(=pass_case) [the same metadata/remaps]
+cargo nextest run --filterset test(=pass_case) --success-output immediate-final \
+  [the same metadata/remaps]
 ```
 
-The expected failure is isolated so the default target remains green:
+The failure assertion uses the corresponding `--failure-output immediate-final`
+control. Human-readable output remains diagnostic; JUnit XML and full status
+mapping are deferred to Phase 5.
+
+The expected failure is isolated behind a green assertion wrapper that proves
+its underlying adapter/child status was nonzero:
 
 ```sh
-set +e
-buck2 test --test-executor-stdout=- --test-executor-stderr=- //:nextest_buck_artifact_expected_failure
-status=$?
-set -e
-[ "$status" -ne 0 ]
+buck2 test --test-executor-stdout=- --test-executor-stderr=- \
+  //:nextest_buck_artifact_expected_failure
 ```
 
 The checked-in fixture is moved aside and inaccessible for the private lifetime
@@ -81,23 +86,28 @@ digest. Paths are normalized to `<WORKSPACE>` and `<TARGET_DIR>` in the
 checked-in baseline; host-specific Rust libdir values are observations, not
 portable contract paths.
 
-`artifact-manifest.example.json` documents manifest schema version 1. It
-contains exactly one package/binary identity, both test names, rooted relative
-executable/working-directory/runtime paths, declared environment, target
-triple/features, and generated outputs. `tools/nextest_artifact.py` rejects
-duplicate JSON keys, wrong types, missing/unknown fields or versions, absolute
-and traversal paths, symlinks, and missing staged entries before nextest runs.
+`artifact-manifest.example.json` documents experimental/pre-release manifest
+schema version 1; a future incompatible contract uses v2 after stabilization or
+external consumption. It contains exactly one package/binary identity, both test
+names, rooted relative executable/working-directory/runtime paths, one static
+runtime input, a manifest-driven environment, target triple/features, and empty
+generated outputs. `tools/nextest_artifact.py` rejects duplicate JSON keys, wrong
+types, missing/unknown fields or versions, unsafe paths/symlinks, adapter-owned
+environment names, invalid file types, overlap, and missing staged entries before
+nextest runs.
 See [`docs/baseline-and-manifest.md`](docs/baseline-and-manifest.md) for the
 field inventory, compatibility policy, and official nextest references.
 
 ## Scope boundary
 
-This feasibility step proves only local discovery/listing and one filtered run
-of a Buck2-built artifact through the installed nextest CLI. Retries, timeouts,
-groups, JUnit/status mapping, remote-like or remote execution, direct nextest
-embedding, native provider promotion, and richer event protocols remain
-unproven and are deliberately deferred. Human-readable nextest output remains
-diagnostic rather than a protocol.
+This Phase 4 step proves local discovery/listing, one static runtime input,
+manifest-driven cwd/environment, deterministic diagnostic output controls, and
+one filtered run of a Buck2-built artifact through the installed nextest CLI.
+Retries, timeouts, groups, JUnit XML, full status mapping, generated outputs,
+shared libraries, cancellation redesign, remote-like or remote execution,
+direct nextest embedding, native provider promotion, and richer event protocols
+remain unproven and are deliberately deferred. Human-readable nextest output
+remains diagnostic rather than a protocol.
 
 ## Resource-contract probe
 

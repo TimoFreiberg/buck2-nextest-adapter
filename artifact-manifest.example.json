@@ -13,11 +13,13 @@
     "generated_outputs": []
   },
   "environment": {
-    "BUCK2_NEXTEST_RUNTIME": "declared"
+    "BUCK2_ARTIFACT_RUNTIME": "declared"
   },
   "paths": {
     "executable": "bin/buck2_nextest_rust_test",
-    "runtime_inputs": [],
+    "runtime_inputs": [
+      "runtime/buck2_artifact_runtime.txt"
+    ],
     "working_directory": "work"
   },
   "platform": {

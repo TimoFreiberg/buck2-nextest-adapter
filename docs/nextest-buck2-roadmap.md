@@ -14,14 +14,17 @@ Buck2 rust_test
 
 The legacy Cargo-fixture regression remains available separately. The new path
 proves one native Buck2 Rust executable, synthetic identity for `pass_case` and
-`fail_case`, rooted runtime staging, metadata-only list/run commands for the
-installed nextest CLI, and exit-status propagation. The Cargo baseline's two
+`fail_case`, one static declared runtime input, manifest-driven cwd/environment,
+rooted staging, deterministic diagnostic output controls, metadata-only list/run
+commands for the installed nextest CLI, and exit-status propagation. The Cargo baseline's two
 integration binaries are observations mapped to one Buck-owned binary.
 
 Result reporting, advanced nextest features, and remote execution remain
-unproven. In particular, retries, timeouts, groups, JUnit/status mapping,
-direct embedding, native provider promotion, and richer event protocols are
-not part of this boundary. Remote execution remains unproven.
+unproven. In particular, retries, timeouts, groups, JUnit XML/full status
+mapping, generated outputs, shared libraries, cancellation redesign, direct
+embedding, native provider promotion, and richer event protocols are not part of
+this boundary. JUnit XML is a deferred reporting surface, not discovery metadata
+or an execution protocol. Remote execution remains unproven.
 
 ## Terminology correction
 
@@ -101,15 +104,15 @@ artifact. Validate, in order:
 
 1. Test listing exposes the expected Buck2-provided test identity.
 2. The pass and intentional-failure cases execute the expected binary.
-3. Shared-library dependencies and runtime data are available.
+3. One declared static runtime data file is available.
 4. The declared working directory and environment are correct.
 5. Filters select the intended tests without relying on Cargo-only names.
-6. Nextest exit codes map correctly to Buck2 test status.
-7. Output capture remains diagnostic and deterministic.
-8. JUnit XML contains the expected test cases and failure details.
+6. Nextest exit codes propagate through the adapter.
+7. Documented output controls make diagnostics deterministic.
 
 **Deliverable:** a local end-to-end Buck2-built test target with pass, failure,
-filter, output, and JUnit checks.
+filter, runtime, cwd/environment, output, and status assertions. JUnit XML and
+full status mapping are deferred to Phase 5.
 
 ### 5. Add result reporting and status mapping
 
@@ -173,15 +176,8 @@ not on the initial Cargo fixture.
 
 ## Recommended immediate next step
 
-Start with **Phase 1 and Phase 2 together**:
-
-1. Capture Cargo and nextest metadata for the current fixture.
-2. Add one real Buck2 Rust test target.
-3. Define the smallest Buck2 provider/manifest containing its binary, identity,
-   runtime dependencies, working directory, and environment.
-4. Compare that data with the Cargo baseline.
-5. Implement only the compatibility fields required for `nextest list` and one
-   local `nextest run`.
-
-Defer retries, remote execution, direct embedding, and richer event protocols
-until the local discovery and artifact handoff boundary is proven.
+Start Phase 5 with a bounded reporting and status-design follow-up: define the
+JUnit XML boundary and full skipped/ignored/filtered/timed-out/aborted/no-tests
+status mapping, then add fixture coverage without changing the Phase 4 local
+artifact contract. Keep retries, remote execution, direct embedding, and richer
+event protocols as separate follow-ups.

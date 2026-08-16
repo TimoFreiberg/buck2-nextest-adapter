@@ -9,6 +9,11 @@ filegroup(
 )
 
 filegroup(
+    name = "runtime/buck2_artifact_runtime.txt",
+    srcs = ["runtime/buck2_artifact_runtime.txt"],
+)
+
+filegroup(
     name = "baseline",
     srcs = [
         "baseline/normalized/cargo-metadata.json",
@@ -27,8 +32,8 @@ rust_test(
 genrule(
     name = "buck2_nextest_artifact_manifest",
     out = "artifact-manifest.json",
-    cmd = "python3 $(source tools/nextest_artifact.py) emit-manifest --artifact $(location :buck2_nextest_rust_test) --output $OUT",
-    srcs = ["tools/nextest_artifact.py", ":buck2_nextest_rust_test"],
+    cmd = "python3 $(source tools/nextest_artifact.py) emit-manifest --artifact $(location :buck2_nextest_rust_test) --runtime-input runtime/buck2_artifact_runtime.txt --runtime-source $(source runtime/buck2_artifact_runtime.txt) --output $OUT",
+    srcs = ["tools/nextest_artifact.py", ":buck2_nextest_rust_test", "runtime/buck2_artifact_runtime.txt"],
 )
 
 sh_binary(
@@ -87,6 +92,15 @@ sh_test(
     ],
 )
 
+sh_test(
+    name = "nextest_spike_expected_failure_assert",
+    test = "nextest_spike_expected_failure_assert.sh",
+    resources = [
+        ":nextest_adapter",
+        "nextest_spike_expected_failure_assert.sh",
+    ],
+)
+
 sh_binary(
     name = "nextest_buck_artifact_runner",
     main = "adapter.sh",
@@ -94,6 +108,7 @@ sh_binary(
     resources = [
         ":buck2_nextest_rust_test",
         ":buck2_nextest_artifact_manifest",
+        "runtime/buck2_artifact_runtime.txt",
         "tools/nextest_artifact.py",
         "tools/cargo_source_denial.sh",
         ":baseline",
@@ -102,45 +117,69 @@ sh_binary(
 
 sh_test(
     name = "nextest_buck_artifact",
-    test = ":nextest_buck_artifact_runner",
+    test = "buck_artifact_scenario.sh",
     args = [
-        "buck-artifact",
-        "--artifact",
         "$(location :buck2_nextest_rust_test)",
-        "--manifest",
         "$(location :buck2_nextest_artifact_manifest)",
-        "--validator",
         "$(source tools/nextest_artifact.py)",
-        "--cargo-baseline",
         "$(source baseline/normalized/cargo-metadata.json)",
-        "--binary-baseline",
         "$(source baseline/normalized/binaries.json)",
-        "--tests-baseline",
         "$(source baseline/normalized/tests.json)",
-        "--scenario",
-        "pass",
+    ],
+    resources = [
+        ":nextest_buck_artifact_runner",
+        "buck_artifact_scenario.sh",
     ],
 )
 
 sh_test(
     name = "nextest_buck_artifact_expected_failure",
-    test = ":nextest_buck_artifact_runner",
+    test = "buck_artifact_expected_failure_assert.sh",
     args = [
-        "buck-artifact",
-        "--artifact",
         "$(location :buck2_nextest_rust_test)",
-        "--manifest",
         "$(location :buck2_nextest_artifact_manifest)",
-        "--validator",
         "$(source tools/nextest_artifact.py)",
-        "--cargo-baseline",
         "$(source baseline/normalized/cargo-metadata.json)",
-        "--binary-baseline",
         "$(source baseline/normalized/binaries.json)",
-        "--tests-baseline",
         "$(source baseline/normalized/tests.json)",
-        "--scenario",
-        "fail",
+    ],
+    resources = [
+        ":nextest_buck_artifact_runner",
+        "buck_artifact_expected_failure_assert.sh",
+    ],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_manifest_mutation",
+    test = "buck_artifact_manifest_mutation.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [
+        ":nextest_buck_artifact_runner",
+        "buck_artifact_manifest_mutation.sh",
+    ],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_invalid_manifest",
+    test = "buck_artifact_invalid_manifest.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [
+        ":nextest_buck_artifact_runner",
+        "buck_artifact_invalid_manifest.sh",
     ],
 )
 
@@ -160,7 +199,11 @@ sh_test(
 sh_test(
     name = "documentation_smoke",
     test = "docs/smoke_documentation.sh",
-    resources = ["README.md", "docs/nextest-buck2-roadmap.md"],
+    resources = [
+        "README.md",
+        "docs/baseline-and-manifest.md",
+        "docs/nextest-buck2-roadmap.md",
+    ],
 )
 
 sh_test(

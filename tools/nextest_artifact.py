@@ -48,9 +48,25 @@ def expect(value: Any, kind: type, name: str) -> Any:
     return value
 
 
+ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+RESERVED_ENVIRONMENT_NAMES = {
+    "PATH",
+    "CARGO_NET_OFFLINE",
+    "CARGO_TARGET_DIR",
+    "CARGO_MANIFEST_DIR",
+    "CARGO_HOME",
+    "BUCK2_NEXTEST_REAL_CARGO",
+    "BUCK2_NEXTEST_DISPATCH_LOG",
+    "BUCK2_NEXTEST_NESTED_CARGO_LOG",
+    "BUCK2_NEXTEST_COMPILER_LOG",
+    "BUCK2_NEXTEST_DISPATCH_ALLOWED",
+    "BUCK2_NEXTEST_REQUIRE_PROCESS_GROUP",
+}
+
+
 def rooted(root: Path, value: Any, name: str, must_exist: bool = True) -> Path:
     expect(value, str, name)
-    if not value or os.path.isabs(value):
+    if not value or "\x00" in value or os.path.isabs(value):
         die(f"{name} must be a non-empty relative path")
     candidate = PurePosixPath(value)
     if candidate == PurePosixPath("."):
@@ -76,6 +92,18 @@ def rooted(root: Path, value: Any, name: str, must_exist: bool = True) -> Path:
     return resolved
 
 
+def path_parts(value: str) -> tuple[str, ...]:
+    return PurePosixPath(value).parts
+
+
+def is_prefix(ancestor: tuple[str, ...], child: tuple[str, ...]) -> bool:
+    return len(ancestor) <= len(child) and child[:len(ancestor)] == ancestor
+
+
+def reserved_environment_name(name: str) -> bool:
+    return name in RESERVED_ENVIRONMENT_NAMES or name.startswith("BUCK2_NEXTEST_")
+
+
 def validate_manifest(path: Path, root: Path, require_paths: bool = True) -> dict[str, Any]:
     data = expect(strict_load(path), dict, "manifest")
     required = {"schema_version", "artifact", "paths", "environment", "platform", "build"}
@@ -96,14 +124,45 @@ def validate_manifest(path: Path, root: Path, require_paths: bool = True) -> dic
     paths = expect(data["paths"], dict, "paths")
     if set(paths) != {"executable", "working_directory", "runtime_inputs"}:
         die("manifest paths have unexpected fields")
-    executable = rooted(root, paths["executable"], "paths.executable", must_exist=require_paths)
-    working = rooted(root, paths["working_directory"], "paths.working_directory", must_exist=require_paths)
+    executable_name = expect(paths["executable"], str, "paths.executable")
+    working_name = expect(paths["working_directory"], str, "paths.working_directory")
+    executable = rooted(root, executable_name, "paths.executable", must_exist=require_paths)
+    working = rooted(root, working_name, "paths.working_directory", must_exist=require_paths)
     runtime = expect(paths["runtime_inputs"], list, "paths.runtime_inputs")
+    runtime_names: list[str] = []
+    runtime_paths: list[Path] = []
     for index, item in enumerate(runtime):
-        rooted(root, item, f"paths.runtime_inputs[{index}]", must_exist=require_paths)
+        item = expect(item, str, f"paths.runtime_inputs[{index}]")
+        if item in runtime_names:
+            die(f"paths.runtime_inputs contains a duplicate path: {item}")
+        runtime_names.append(item)
+        runtime_paths.append(rooted(root, item, f"paths.runtime_inputs[{index}]", must_exist=require_paths))
+    executable_parts = path_parts(executable_name)
+    working_parts = path_parts(working_name)
+    for name in runtime_names:
+        parts = path_parts(name)
+        if is_prefix(parts, executable_parts) or is_prefix(parts, working_parts):
+            die(f"runtime input conflicts with executable or working directory: {name}")
+    if is_prefix(executable_parts, working_parts) or is_prefix(working_parts, executable_parts):
+        die("paths.executable and paths.working_directory overlap")
+    if require_paths:
+        if not executable.is_file() or executable.is_symlink() or not os.access(executable, os.X_OK):
+            die("paths.executable must be an executable regular file")
+        if not working.is_dir() or working.is_symlink():
+            die("paths.working_directory must be a directory")
+        for index, item in enumerate(runtime_paths):
+            if not item.is_file() or item.is_symlink():
+                die(f"paths.runtime_inputs[{index}] must be a regular file")
     environment = expect(data["environment"], dict, "environment")
-    if environment != {"BUCK2_NEXTEST_RUNTIME": "declared"}:
-        die("manifest environment does not match the declared runtime contract")
+    for name, value in environment.items():
+        expect(name, str, "environment key")
+        if not ENVIRONMENT_NAME.fullmatch(name):
+            die(f"environment name is invalid: {name}")
+        expect(value, str, f"environment.{name}")
+        if "\x00" in name or "\x00" in value:
+            die(f"environment.{name} contains a NUL byte")
+        if reserved_environment_name(name):
+            die(f"environment name is adapter-owned: {name}")
     platform_data = expect(data["platform"], dict, "platform")
     if set(platform_data) != {"target_triple", "target_features"}:
         die("manifest platform fields are invalid")
@@ -113,9 +172,14 @@ def validate_manifest(path: Path, root: Path, require_paths: bool = True) -> dic
     if set(build) != {"generated_outputs"}:
         die("manifest build fields are invalid")
     outputs = expect(build["generated_outputs"], list, "build.generated_outputs")
-    for index, item in enumerate(outputs):
-        rooted(root, item, f"build.generated_outputs[{index}]", must_exist=require_paths)
-    return {"manifest": data, "executable": executable, "working_directory": working}
+    if outputs:
+        die("build.generated_outputs must be empty in manifest schema version 1")
+    return {
+        "manifest": data,
+        "executable": executable,
+        "working_directory": working,
+        "runtime_paths": runtime_paths,
+    }
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -128,6 +192,13 @@ def emit_manifest(args: argparse.Namespace) -> None:
     if not artifact.is_file():
         die(f"declared Buck artifact does not exist: {artifact}")
     triple = args.target_triple or f"{platform.machine()}-{platform.system().lower()}"
+    runtime_input = args.runtime_input
+    if not runtime_input:
+        die("--runtime-input is required")
+    runtime_path = Path(args.runtime_source)
+    if not runtime_path.is_file() or runtime_path.is_symlink():
+        die(f"declared runtime input does not exist: {runtime_path}")
+    environment = {"BUCK2_ARTIFACT_RUNTIME": args.runtime_environment}
     manifest = {
         "schema_version": 1,
         "artifact": {
@@ -140,9 +211,9 @@ def emit_manifest(args: argparse.Namespace) -> None:
         "paths": {
             "executable": "bin/buck2_nextest_rust_test",
             "working_directory": "work",
-            "runtime_inputs": [],
+            "runtime_inputs": [runtime_input],
         },
-        "environment": {"BUCK2_NEXTEST_RUNTIME": "declared"},
+        "environment": environment,
         "platform": {"target_triple": triple, "target_features": "unknown"},
         "build": {"generated_outputs": []},
     }
@@ -230,7 +301,7 @@ def synthetic_metadata(args: argparse.Namespace) -> None:
         "binary-name": BINARY_NAME,
         "binary-path": binary_path,
         "build-platform": "target",
-        "cwd": str(workspace),
+        "cwd": str((Path(args.manifest_root).resolve() / manifest["paths"]["working_directory"]).resolve()),
         "kind": "test",
         "package-id": package_id,
         "package-name": PACKAGE,
@@ -288,12 +359,35 @@ def digest(args: argparse.Namespace) -> None:
     print(h)
 
 
+def stage_runtime(args: argparse.Namespace) -> None:
+    result = validate_manifest(Path(args.manifest), Path(args.root), require_paths=False)
+    resource_root = Path(args.resources).resolve()
+    root = Path(args.root).resolve()
+    for name in result["manifest"]["paths"]["runtime_inputs"]:
+        source = rooted(resource_root, name, f"runtime resource {name}", must_exist=True)
+        if source.is_symlink() or not source.is_file():
+            die(f"declared runtime resource is not a regular file: {name}")
+        destination = root / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+
+
+def emit_environment(args: argparse.Namespace) -> None:
+    manifest = validate_manifest(Path(args.manifest), Path(args.root), require_paths=True)["manifest"]
+    for name, value in manifest["environment"].items():
+        import shlex
+        print(f"export {name}={shlex.quote(value)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("emit-manifest")
     p.add_argument("--output", required=True)
     p.add_argument("--artifact", required=True)
+    p.add_argument("--runtime-input", required=True)
+    p.add_argument("--runtime-source", required=True)
+    p.add_argument("--runtime-environment", default="declared")
     p.add_argument("--target-triple")
     p.set_defaults(func=emit_manifest)
     p = sub.add_parser("validate-manifest")
@@ -318,6 +412,15 @@ def main() -> None:
     p = sub.add_parser("digest")
     p.add_argument("path")
     p.set_defaults(func=digest)
+    p = sub.add_parser("stage-runtime")
+    p.add_argument("--manifest", required=True)
+    p.add_argument("--root", required=True)
+    p.add_argument("--resources", required=True)
+    p.set_defaults(func=stage_runtime)
+    p = sub.add_parser("emit-environment")
+    p.add_argument("--manifest", required=True)
+    p.add_argument("--root", required=True)
+    p.set_defaults(func=emit_environment)
     args = parser.parse_args()
     args.func(args)
 

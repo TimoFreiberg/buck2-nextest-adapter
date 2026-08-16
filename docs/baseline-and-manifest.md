@@ -44,18 +44,28 @@ Those pages document the command surface and field families, but nextest does
 not publish the JSON as a general compatibility schema. The installed version
 is therefore captured alongside the normalized observation.
 
-## Version 1 manifest
+## Version 1 manifest (experimental pre-release)
 
-`artifact-manifest.example.json` is the checked-in shape. Version 1 supports
-exactly one local native Buck2 Rust test artifact:
+`artifact-manifest.example.json` is the checked-in shape. Version 1 is an
+experimental, pre-release repository-owned contract; after stabilization or
+external consumption, incompatible changes will use version 2. Version 1
+supports exactly one local native Buck2 Rust test artifact:
 
 - package `buck2-nextest-buck-artifact`;
 - binary ID/name `buck2_nextest_rust_test`;
 - target kind `test`;
 - test cases `pass_case` and `fail_case`;
-- executable, working directory, runtime inputs, and generated outputs as
-  relative paths below one private staging root;
-- declared environment and target triple/features.
+- executable, working directory, and runtime inputs as relative paths below one
+  private staging root; this phase proves one static runtime input;
+- a manifest-driven working directory and string environment map;
+- `build.generated_outputs`, present and empty, plus target triple/features.
+
+The adapter stages every declared static runtime input from
+`BUCK_DEFAULT_RUNTIME_RESOURCES` to the same rooted path below its private root,
+then validates the executable, cwd, and files before dispatch. It applies the
+manifest environment and synthesizes suite metadata with the manifest cwd. The
+fixture proves access to the declared file from that cwd and accepts the valid
+mutation value used by the hermetic scenario.
 
 Unknown schema versions and extra or missing fields fail closed. Paths cannot
 be absolute, contain `.`/`..`, be missing, be symlinks, or resolve outside the
@@ -78,9 +88,11 @@ run Cargo build/test to produce the executable. It compares SHA-256 digests of
 the declared Buck output and staged executable and rejects Cargo target-dir
 provenance.
 
-The installed nextest 0.9.143 exposes the required flags. The adapter's
-Buck-artifact path moves the checked-in fixture aside for its private lifetime,
-uses a private Cargo home/manifest root, and supplies only synthetic metadata.
+The installed nextest 0.9.143 exposes the required flags, including
+`--success-output immediate-final` and `--failure-output immediate-final` for
+deterministic diagnostic output. The adapter's Buck-artifact path uses a private
+Cargo home/manifest root and supplies only synthetic metadata; it never rebuilds
+or rediscovers the Buck artifact through Cargo.
 A true no-discovery claim still requires source-denial wrappers around the
 installed Cargo/nextest dispatch to pass; absence of a printed build line alone
 is not evidence. The lifecycle signal scenario also requires `setsid` (or an
@@ -88,6 +100,8 @@ equivalent launcher) to track a process group. The current macOS host does not
 provide `setsid` on `PATH`, so that scenario is a reported prerequisite blocker
 rather than a weaker cleanup implementation.
 
-Retries, timeouts, groups, JUnit/status mapping, remote-like or remote
-execution, direct nextest embedding, native provider promotion, and richer
-event protocols remain outside this boundary.
+Retries, timeouts, groups, JUnit XML, full status mapping, remote-like or remote
+execution, direct nextest embedding, native provider promotion, cancellation
+redesign, generated outputs, shared libraries, and richer event protocols remain
+outside this boundary. JUnit XML is a deferred reporting surface, not discovery
+metadata or an execution protocol.

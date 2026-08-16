@@ -11,7 +11,7 @@ fail() {
     exit 2
 }
 
-resource_root=${BUCK_PROJECT_ROOT:-${BUCK_DEFAULT_RUNTIME_RESOURCES:-.}}
+resource_root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-${BUCK_PROJECT_ROOT:-.}}
 mode=
 manifest=
 manifest_explicit=false
@@ -102,7 +102,7 @@ esac
 command -v cargo >/dev/null 2>&1 || fail "cargo is not available on PATH"
 command -v python3 >/dev/null 2>&1 || fail "python3 is not available on PATH"
 help_output=$(cargo nextest run --help 2>&1) || fail "cargo nextest is not available"
-for flag in --filterset --cargo-metadata --binaries-metadata --target-dir-remap --workspace-remap --build-dir-remap; do
+for flag in --filterset --cargo-metadata --binaries-metadata --target-dir-remap --workspace-remap --build-dir-remap --success-output --failure-output; do
     printf '%s\n' "$help_output" | grep -F -- "$flag" >/dev/null 2>&1 || fail "cargo nextest run does not expose $flag"
 done
 list_help=$(cargo nextest list --help 2>&1) || fail "cargo nextest list is not available"
@@ -148,19 +148,7 @@ if [ "$mode" = buck-artifact ] && [ "${BUCK2_NEXTEST_REQUIRE_PROCESS_GROUP:-0}" 
 fi
 
 private_root=$(mktemp -d "${TMPDIR:-/tmp}/buck2-nextest-$mode.XXXXXX") || fail "could not create private root"
-if [ "$mode" = buck-artifact ] && [ -e "$resource_root/fixture" ]; then
-    fixture_sentinel="$private_root/fixture-access-denied"
-    mv "$resource_root/fixture" "$fixture_sentinel"
-    fixture_restored=false
-    restore_fixture() {
-        if [ "$fixture_restored" = false ]; then
-            mv "$fixture_sentinel" "$resource_root/fixture"
-            fixture_restored=true
-        fi
-    }
-else
-    restore_fixture() { :; }
-fi
+restore_fixture() { :; }
 cleanup_done=false
 child_pid=
 child_pgid=
@@ -208,8 +196,13 @@ if [ "$mode" = buck-artifact ]; then
 fi
 cp "$manifest_input" "$private_root/manifest.json"
 cp "$validator_script" "$private_root/nextest_artifact.py"
-cp "$validator/../cargo_source_denial.sh" "$private_root/cargo" 2>/dev/null || cp tools/cargo_source_denial.sh "$private_root/cargo"
-cp "$validator/../cargo_source_denial.sh" "$private_root/rustc" 2>/dev/null || cp tools/cargo_source_denial.sh "$private_root/rustc"
+source_denial=${BUCK2_NEXTEST_SOURCE_DENIAL:-}
+if [ -z "$source_denial" ]; then
+    source_denial="$validator/../cargo_source_denial.sh"
+    [ -r "$source_denial" ] || source_denial=tools/cargo_source_denial.sh
+fi
+cp "$source_denial" "$private_root/cargo"
+cp "$source_denial" "$private_root/rustc"
 chmod +x "$private_root/cargo" "$private_root/rustc"
 cp "$baseline_cargo" "$private_root/baseline-cargo.json"
 cp "$baseline_binaries" "$private_root/baseline-binaries.json"
@@ -219,13 +212,20 @@ executable_rel=$(python3 -c 'import json; print(json.load(open("'$private_root'/
 working_rel=$(python3 -c 'import json; print(json.load(open("'$private_root'/manifest.json"))["paths"]["working_directory"])')
 executable_stage="$private_root/$executable_rel"
 working_stage="$private_root/$working_rel"
-mkdir -p "$(dirname "$executable_stage")" "$working_stage"
+mkdir -p "$(dirname "$executable_stage")"
 cp "$artifact" "$executable_stage"
 chmod +x "$executable_stage"
+python3 "$private_root/nextest_artifact.py" stage-runtime --manifest "$private_root/manifest.json" --root "$private_root" --resources "$resource_root"
+for runtime_path in $(python3 -c 'import json; print(" ".join(json.load(open("'$private_root'/manifest.json"))["paths"]["runtime_inputs"]))'); do
+    [ -f "$private_root/$runtime_path" ] || fail "staged runtime input is missing: $runtime_path"
+done
+mkdir -p "$working_stage"
 python3 "$private_root/nextest_artifact.py" validate-manifest --manifest "$private_root/manifest.json" --root "$private_root"
-python3 "$private_root/nextest_artifact.py" synthesize --cargo-baseline "$private_root/baseline-cargo.json" --binary-baseline "$private_root/baseline-binaries.json" --tests-baseline "$private_root/baseline-tests.json" --target-dir "$private_root/target" --workspace "$private_root/workspace" --output-dir "$private_root/meta" --manifest "$private_root/manifest.json" --manifest-root "$private_root"
+python3 "$private_root/nextest_artifact.py" synthesize --cargo-baseline "$private_root/baseline-cargo.json" --binary-baseline "$private_root/baseline-binaries.json" --tests-baseline "$private_root/baseline-tests.json" --target-dir "$private_root/target" --workspace "$working_stage" --output-dir "$private_root/meta" --manifest "$private_root/manifest.json" --manifest-root "$private_root"
 cp "$executable_stage" "$private_root/target/debug/deps/buck2_nextest_rust_test"
 chmod +x "$private_root/target/debug/deps/buck2_nextest_rust_test"
+# Apply only the validated manifest environment; adapter-owned controls remain exported below.
+eval "$(python3 "$private_root/nextest_artifact.py" emit-environment --manifest "$private_root/manifest.json" --root "$private_root")"
 
 digest_file() {
     if command -v sha256sum >/dev/null 2>&1; then
@@ -246,7 +246,6 @@ run_nextest() {
     command cargo nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
 }
 printf '[package]\nname = "buck2-nextest-buck-artifact"\nversion = "0.1.0"\nedition = "2021"\n' > "$private_root/workspace/Cargo.toml"
-export BUCK2_NEXTEST_RUNTIME=declared
 cd "$working_stage"
 printf 'buck2-nextest-adapter: exec cargo nextest list --message-format json (supplied metadata)\n'
 run_nextest list --message-format json >"$private_root/list.json"
@@ -259,10 +258,12 @@ grep -F 'buck2_nextest_rust_test' "$private_root/list.json" >/dev/null 2>&1 || f
 grep -F 'pass_case' "$private_root/list.json" >/dev/null 2>&1 || fail "pass_case was not listed"
 grep -F 'fail_case' "$private_root/list.json" >/dev/null 2>&1 || fail "fail_case was not listed"
 printf 'buck2-nextest-adapter: exec cargo nextest run --filterset %s (supplied metadata)\n' "$filterset"
+output_mode=--success-output
+[ "$scenario" = fail ] && output_mode=--failure-output
 if [ -n "$launcher" ]; then
-    "$launcher" sh -c 'exec cargo nextest run --message-format human --filterset "$1" --cargo-metadata "$2" --binaries-metadata "$3" --target-dir-remap "$4" --build-dir-remap "$4" --workspace-remap "$5"' sh "$filterset" "$private_root/meta/cargo-metadata.json" "$private_root/meta/binaries-metadata.json" "$private_root/target" "$private_root/workspace" &
+    "$launcher" sh -c 'exec cargo nextest run --message-format human --filterset "$1" '"$output_mode"' immediate-final --cargo-metadata "$2" --binaries-metadata "$3" --target-dir-remap "$4" --build-dir-remap "$4" --workspace-remap "$5"' sh "$filterset" "$private_root/meta/cargo-metadata.json" "$private_root/meta/binaries-metadata.json" "$private_root/target" "$private_root/workspace" &
 else
-    BUCK2_NEXTEST_DISPATCH_ALLOWED=1 cargo nextest run --message-format human --filterset "$filterset" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace" &
+    BUCK2_NEXTEST_DISPATCH_ALLOWED=1 cargo nextest run --message-format human --filterset "$filterset" "$output_mode" immediate-final --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace" &
 fi
 child_pid=$!
 if [ -n "$launcher" ]; then
