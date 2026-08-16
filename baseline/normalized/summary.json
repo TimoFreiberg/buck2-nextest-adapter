@@ -1,0 +1,31 @@
+{
+  "consumed_fields": [
+    "package-id",
+    "package-name",
+    "binary-id",
+    "binary-name",
+    "kind",
+    "binary-path",
+    "cwd",
+    "testcases",
+    "platforms",
+    "linked-paths",
+    "build-script-out-dirs",
+    "environment"
+  ],
+  "normalized_paths": {
+    "rust_libdir": "<RUST_LIBDIR>",
+    "target_directory": "<TARGET_DIR>",
+    "workspace": "<WORKSPACE>"
+  },
+  "observed_package": "buck2-nextest-fixture",
+  "observed_test_binaries": [
+    "fail_case",
+    "pass_case"
+  ],
+  "observed_test_cases": [
+    "pass_case",
+    "fail_case"
+  ],
+  "schema": 1
+}

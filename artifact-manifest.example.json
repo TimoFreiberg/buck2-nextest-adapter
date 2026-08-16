@@ -1,0 +1,28 @@
+{
+  "artifact": {
+    "binary_id": "buck2_nextest_rust_test",
+    "binary_name": "buck2_nextest_rust_test",
+    "package_name": "buck2-nextest-buck-artifact",
+    "target_kind": "test",
+    "test_cases": [
+      "pass_case",
+      "fail_case"
+    ]
+  },
+  "build": {
+    "generated_outputs": []
+  },
+  "environment": {
+    "BUCK2_NEXTEST_RUNTIME": "declared"
+  },
+  "paths": {
+    "executable": "bin/buck2_nextest_rust_test",
+    "runtime_inputs": [],
+    "working_directory": "work"
+  },
+  "platform": {
+    "target_features": "unknown",
+    "target_triple": "aarch64-apple-darwin"
+  },
+  "schema_version": 1
+}

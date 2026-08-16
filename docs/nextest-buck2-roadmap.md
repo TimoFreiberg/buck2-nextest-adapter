@@ -2,22 +2,26 @@
 
 ## Current position
 
-The repository has a local Buck2-supervised spike:
+The repository now proves a local Buck2-built artifact handoff:
 
 ```text
-Buck2 sh_test
-  -> POSIX adapter
-       -> cargo nextest
-            -> checked-in Cargo fixture
+Buck2 rust_test
+  -> declared version-1 manifest + Buck output
+       -> POSIX adapter
+            -> supplied Cargo/nextest metadata
+                 -> cargo nextest list/run
 ```
 
-The spike proves that Buck2 can supervise an adapter, that nextest can run a
-selected test, and that nextest's exit status can propagate back to Buck2. It
-does **not** run a Buck2-built test artifact. Cargo still owns discovery,
-metadata, artifact layout, and compilation.
+The legacy Cargo-fixture regression remains available separately. The new path
+proves one native Buck2 Rust executable, synthetic identity for `pass_case` and
+`fail_case`, rooted runtime staging, metadata-only list/run commands for the
+installed nextest CLI, and exit-status propagation. The Cargo baseline's two
+integration binaries are observations mapped to one Buck-owned binary.
 
-The next phase must replace the Cargo-owned fixture with Buck2-provided binary
-and runtime information.
+Result reporting, advanced nextest features, and remote execution remain
+unproven. In particular, retries, timeouts, groups, JUnit/status mapping,
+direct embedding, native provider promotion, and richer event protocols are
+not part of this boundary. Remote execution remains unproven.
 
 ## Terminology correction
 

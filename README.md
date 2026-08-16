@@ -1,53 +1,119 @@
-# Buck2/nextest spike
+# Buck2/nextest artifact handoff
 
-This repository contains a smallest-useful local Buck2/nextest harness. It is
-intentionally a **Cargo-owned fixture stand-in**: Buck2 supervises an adapter,
-but the adapter still lets Cargo and nextest discover and build the checked-in
-fixture. This does not establish that nextest can discover or run a Buck2-built
-artifact, remove Cargo from discovery, or work with remote execution.
+This repository proves the first local Buck2/nextest artifact boundary. Buck2
+builds one native `rust_test` executable, emits a versioned serialized manifest,
+and a POSIX adapter stages that declared output for documented nextest metadata
+reuse. The original Cargo fixture remains as a separate legacy regression path.
 
 ## Prerequisites
 
 Run on a Unix-like host with these tools already installed and available on
 `PATH`:
 
-- `buck2`
-- Rust/Cargo (`rustc` and `cargo`)
-- Cargo 1.78 or newer (the checked-in lockfile uses format 4)
-- `cargo-nextest` with `cargo nextest run --help` exposing `--filterset`
+- `buck2` with the bundled prelude native `rust_test` rule;
+- Rust/Cargo (`rustc` and `cargo`);
+- Cargo 1.78 or newer (the checked-in lockfile uses format 4);
+- `cargo-nextest` 0.9.143 in the captured environment, exposing
+  `--cargo-metadata`, `--binaries-metadata`, `--target-dir-remap`,
+  `--workspace-remap`, `--build-dir-remap`, and `--filterset`;
+- Python 3 for baseline, manifest, and scenario development/test tooling.
 
-No toolchain provisioning is included in this spike. The adapter sets
-`CARGO_NET_OFFLINE=true`, uses the locked dependency-free fixture, and places
-all Cargo build output in a temporary directory removed on exit.
+No toolchain provisioning is included. The legacy adapter sets
+`CARGO_NET_OFFLINE=true`; the Buck artifact path does not run Cargo build/test
+to produce its executable. `setsid` (or an equivalent process-group launcher)
+is required only by the signal-cleanup scenario. The current macOS host does
+not provide `setsid` on `PATH`, so that lifecycle scenario reports a concrete
+prerequisite blocker rather than silently claiming descendant cleanup.
 
-## Buck2 checks
-
-The normal green target is deliberately separate from the negative check:
+## Legacy Cargo-fixture regression
 
 ```sh
 buck2 test --test-executor-stdout=- --test-executor-stderr=- //:nextest_spike
 ```
 
-This Buck2 release uses `--test-executor-stdout=- --test-executor-stderr=-`
-to stream test output; older releases may spell the same operation
-`--show-output`.
+This retains the original Cargo-owned behavior and is intentionally not used
+to prove the Buck artifact handoff.
 
-The adapter should print markers including:
+## Buck2-built artifact handoff
 
-```text
-buck2-nextest-adapter: scenario=pass manifest=...
-buck2-nextest-adapter: exec cargo nextest run --manifest-path ... --locked --filterset test(=pass_case)
+```sh
+buck2 build //:buck2_nextest_rust_test //:buck2_nextest_artifact_manifest
+buck2 test --test-executor-stdout=- --test-executor-stderr=- //:nextest_buck_artifact
 ```
 
-The normal command names only `//:nextest_spike`; it does not run the expected
-failure target. The required resource-contract probe can be run independently:
+The native target is one executable with `pass_case` and `fail_case`. The
+adapter consumes its declared Buck output, validates the manifest before the
+nextest marker, computes matching SHA-256 digests for the Buck output and
+staged executable, synthesizes Cargo-shaped metadata, and invokes:
+
+```text
+cargo nextest list --cargo-metadata ... --binaries-metadata ... \
+  --target-dir-remap ... --workspace-remap ... --build-dir-remap ...
+cargo nextest run --filterset test(=pass_case) [the same metadata/remaps]
+```
+
+The expected failure is isolated so the default target remains green:
+
+```sh
+set +e
+buck2 test --test-executor-stdout=- --test-executor-stderr=- //:nextest_buck_artifact_expected_failure
+status=$?
+set -e
+[ "$status" -ne 0 ]
+```
+
+The checked-in fixture is moved aside and inaccessible for the private lifetime
+of the Buck artifact path; its two Cargo integration binaries are baseline
+observations mapped to one synthetic Buck identity, `buck2-nextest-buck-artifact` /
+`buck2_nextest_rust_test`, of kind `test`.
+
+## Baseline and manifest contract
+
+Capture the installed baseline in an isolated temporary root:
+
+```sh
+CARGO_NET_OFFLINE=true ./tools/capture_cargo_nextest_baseline.sh baseline/normalized
+```
+
+The command records Cargo metadata, nextest binary-only and test-list JSON,
+exact tool versions, target/platform information, and a checked-in fixture
+digest. Paths are normalized to `<WORKSPACE>` and `<TARGET_DIR>` in the
+checked-in baseline; host-specific Rust libdir values are observations, not
+portable contract paths.
+
+`artifact-manifest.example.json` documents manifest schema version 1. It
+contains exactly one package/binary identity, both test names, rooted relative
+executable/working-directory/runtime paths, declared environment, target
+triple/features, and generated outputs. `tools/nextest_artifact.py` rejects
+duplicate JSON keys, wrong types, missing/unknown fields or versions, absolute
+and traversal paths, symlinks, and missing staged entries before nextest runs.
+See [`docs/baseline-and-manifest.md`](docs/baseline-and-manifest.md) for the
+field inventory, compatibility policy, and official nextest references.
+
+## Scope boundary
+
+This feasibility step proves only local discovery/listing and one filtered run
+of a Buck2-built artifact through the installed nextest CLI. Retries, timeouts,
+groups, JUnit/status mapping, remote-like or remote execution, direct nextest
+embedding, native provider promotion, and richer event protocols remain
+unproven and are deliberately deferred. Human-readable nextest output remains
+diagnostic rather than a protocol.
+
+## Resource-contract probe
+
+The original resource-contract probe remains available for the legacy fixture:
 
 ```sh
 buck2 test --test-executor-stdout=- --test-executor-stderr=- //:nextest_spike_probe
 ```
 
-The probe prints its resolved executable, project/resource roots, working
-directory, and each declared fixture resource after reading it.
+It prints its resolved executable, project/resource roots, working directory,
+and each declared fixture resource after reading it. The Buck artifact scenario
+is the contract check for the new manifest and native executable.
+
+This Buck2 release uses `--test-executor-stdout=- --test-executor-stderr=-`
+to stream test output; older releases may spell the same operation
+`--show-output`.
 
 To verify failure propagation without making the default command fail, use an
 isolated shell assertion. The fixture files must remain unchanged:
@@ -85,11 +151,10 @@ diagnostic only and is not parsed as a protocol.
 
 ## Adapter validation
 
-The adapter's narrow interface is:
-
-```text
-adapter.sh [--manifest-path PATH] [--scenario pass|fail]
-```
+The legacy adapter interface is `adapter.sh cargo-fixture [--manifest-path PATH]
+[--scenario pass|fail]`. Buck artifact runs use `adapter.sh buck-artifact` with
+one declared artifact, manifest, validator, and three baseline metadata files;
+they reject fixture resources and `--manifest-path`.
 
 It defaults to the fixture manifest and the `pass` scenario. These checks must
 all fail before printing an `exec cargo nextest run` marker:

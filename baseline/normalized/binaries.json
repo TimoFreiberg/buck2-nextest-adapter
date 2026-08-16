@@ -1,0 +1,59 @@
+{
+  "rust-binaries": {
+    "buck2-nextest-fixture": {
+      "binary-id": "buck2-nextest-fixture",
+      "binary-name": "buck2_nextest_fixture",
+      "binary-path": "<BASELINE_ROOT>/target/debug/deps/buck2_nextest_fixture-62c6a945609e802e",
+      "build-platform": "target",
+      "kind": "lib",
+      "package-id": "path+file://<WORKSPACE>/fixture#buck2-nextest-fixture@0.1.0"
+    },
+    "buck2-nextest-fixture::fail_case": {
+      "binary-id": "buck2-nextest-fixture::fail_case",
+      "binary-name": "fail_case",
+      "binary-path": "<BASELINE_ROOT>/target/debug/deps/fail_case-236a089aabe12ae9",
+      "build-platform": "target",
+      "kind": "test",
+      "package-id": "path+file://<WORKSPACE>/fixture#buck2-nextest-fixture@0.1.0"
+    },
+    "buck2-nextest-fixture::pass_case": {
+      "binary-id": "buck2-nextest-fixture::pass_case",
+      "binary-name": "pass_case",
+      "binary-path": "<BASELINE_ROOT>/target/debug/deps/pass_case-c6ad632dd802bcc0",
+      "build-platform": "target",
+      "kind": "test",
+      "package-id": "path+file://<WORKSPACE>/fixture#buck2-nextest-fixture@0.1.0"
+    }
+  },
+  "rust-build-meta": {
+    "base-output-directories": [
+      "debug"
+    ],
+    "build-directory": "<BASELINE_ROOT>/target",
+    "build-script-info": {},
+    "build-script-out-dirs": {},
+    "linked-paths": [],
+    "non-test-binaries": {},
+    "platforms": {
+      "host": {
+        "libdir": {
+          "path": "<RUST_LIBDIR>",
+          "status": "available"
+        },
+        "platform": {
+          "target-features": "unknown",
+          "triple": "aarch64-apple-darwin"
+        }
+      },
+      "targets": []
+    },
+    "target-directory": "<BASELINE_ROOT>/target",
+    "target-platform": null,
+    "target-platforms": [
+      {
+        "target-features": "unknown",
+        "triple": "aarch64-apple-darwin"
+      }
+    ]
+  }
+}
