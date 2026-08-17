@@ -198,12 +198,13 @@ cp "$manifest_input" "$private_root/manifest.json"
 cp "$validator_script" "$private_root/nextest_artifact.py"
 source_denial=${BUCK2_NEXTEST_SOURCE_DENIAL:-}
 if [ -z "$source_denial" ]; then
-    source_denial="$validator/../cargo_source_denial.sh"
-    [ -r "$source_denial" ] || source_denial=tools/cargo_source_denial.sh
+    source_denial="$resource_root/tools/cargo_source_denial.sh"
+    [ -r "$source_denial" ] || source_denial="$resource_root/cargo_source_denial.sh"
 fi
-cp "$source_denial" "$private_root/cargo"
-cp "$source_denial" "$private_root/rustc"
-chmod +x "$private_root/cargo" "$private_root/rustc"
+[ -r "$source_denial" ] || fail "source-denial helper is not declared: $source_denial"
+cp "$source_denial" "$private_root/cargo" || fail "could not stage source-denial cargo wrapper"
+cp "$source_denial" "$private_root/rustc" || fail "could not stage source-denial rustc wrapper"
+chmod +x "$private_root/cargo" "$private_root/rustc" || fail "could not make source-denial wrappers executable"
 cp "$baseline_cargo" "$private_root/baseline-cargo.json"
 cp "$baseline_binaries" "$private_root/baseline-binaries.json"
 cp "$baseline_tests" "$private_root/baseline-tests.json"

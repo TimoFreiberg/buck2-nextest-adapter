@@ -49,6 +49,22 @@ def expect(value: Any, kind: type, name: str) -> Any:
 
 
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+ADAPTER_OWNED_PATHS = (
+    "manifest.json",
+    "nextest_artifact.py",
+    "cargo",
+    "rustc",
+    "baseline-cargo.json",
+    "baseline-binaries.json",
+    "baseline-tests.json",
+    "dispatch.log",
+    "nested-cargo.log",
+    "compiler.log",
+    "workspace",
+    "target",
+    "meta",
+)
+
 RESERVED_ENVIRONMENT_NAMES = {
     "PATH",
     "CARGO_NET_OFFLINE",
@@ -143,6 +159,10 @@ def validate_manifest(path: Path, root: Path, require_paths: bool = True) -> dic
         parts = path_parts(name)
         if is_prefix(parts, executable_parts) or is_prefix(parts, working_parts):
             die(f"runtime input conflicts with executable or working directory: {name}")
+        for owned in ADAPTER_OWNED_PATHS:
+            owned_parts = path_parts(owned)
+            if is_prefix(parts, owned_parts) or is_prefix(owned_parts, parts):
+                die(f"runtime input conflicts with adapter-owned path: {name}")
     if is_prefix(executable_parts, working_parts) or is_prefix(working_parts, executable_parts):
         die("paths.executable and paths.working_directory overlap")
     if require_paths:

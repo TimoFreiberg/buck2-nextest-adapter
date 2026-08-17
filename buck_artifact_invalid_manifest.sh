@@ -13,7 +13,7 @@ cp "$manifest" "$tmp/manifest.json"
 python3 - "$tmp/manifest.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-d['environment']['BUCK2_NEXTEST_RUNTIME'] = 'forbidden'
+d['paths']['runtime_inputs'] = ['manifest.json']
 json.dump(d, open(sys.argv[1], 'w'))
 PY
 : > "$tmp/dispatch.log"
@@ -23,5 +23,5 @@ status=$?
 set -e
 [ "$status" -ne 0 ]
 [ ! -s "$tmp/dispatch.log" ]
-grep -F 'environment name is adapter-owned' "$tmp/out"
+grep -F 'runtime input conflicts with adapter-owned path' "$tmp/out"
 printf '%s\n' 'invalid manifest dispatch proof: passed'
