@@ -23,7 +23,10 @@ The first bounded Phase 5 milestone is complete: caller-selected JUnit pass-thro
 and nextest process statuses are covered for pass (`0`), test failure (`100`),
 ignored/skipped success, filtered-out absence, and explicit no-tests (`4`). A
 post-dispatch required-export failure is adapter status `3`; pre-dispatch input
-validation is `2`. Human output is diagnostic only.
+validation is `2`. Human output is diagnostic only. The separate metadata-shape
+checks and explicit `nextest list` before each run are development and regression
+coverage; the final integration should retain the checks that protect its
+contract without assuming both steps belong in every production invocation.
 
 This does not complete broad Phase 5 or later phases. A completed timeout remains
 an ordinary JUnit `<failure>`/test-failure status with no distinct XML marker.
@@ -104,6 +107,13 @@ private `cargo-nextest` APIs as the first implementation.
 **Deliverable:** `cargo nextest list` and `cargo nextest run` operate on a
 Buck2-built test artifact without Cargo recompiling or rediscovering it.
 
+The explicit `list` call is valuable during development because it validates the
+translated metadata and test identities before execution. It is not yet a
+commitment that every production run must perform a redundant `list` immediately
+before `run`. A final Buck integration may expose listing through Buck's test
+listing interface, retain it as a preflight/debug mode, or omit it from the
+normal execution path once the metadata contract is independently tested.
+
 ### 4. Prove local artifact execution
 
 Expand the current local spike from a Cargo-owned fixture to a Buck2-owned
@@ -145,10 +155,49 @@ pass, failure, ignored/skipped, filtered, and no-tests-selected behavior. Distin
 timeout observation and abort/cancel mapping are explicit follow-ups, not implied
 coverage.
 
-### 6. Exercise nextest features against Buck2 metadata
+### 6. Define output and run-state ownership
 
-Once basic execution is stable, validate features that depend on runtime and
-identity metadata:
+Decide which files belong to the Buck test target and which files are only
+execution state. A physical location under `buck-out` is not enough to make a
+file a Buck output: the rule or action must declare the output and expose it
+through the Buck test integration.
+
+Use three deliberately separate categories:
+
+- **Declared target outputs:** caller-visible JUnit XML and, if useful, logs,
+  machine-readable results, or a run archive. A declared output directory may
+  contain several such files, including files selected by a supported profile
+  or filter configuration.
+- **Persistent nextest records:** optional run history used by nextest reruns.
+  These records track mutable run state and test-event history, so they need an
+  explicit retention, workspace-identity, concurrency, and `buck clean` policy;
+  they must not silently become ordinary cached build outputs.
+- **Per-run scratch:** the synthesized Cargo workspace, temporary metadata,
+  nextest target/run state, and intermediate report. This must be private and
+  writable for each invocation. It may use a Buck-declared execution/output
+  area when Buck can provide one safely; otherwise it may use a private
+  temporary directory. It must never rely on arbitrary unmanaged writes across
+  `buck-out`.
+
+Make output identity match supported nextest settings. Profiles, filters,
+retries, timeouts, and similar settings that affect results must be Buck rule
+attributes or otherwise participate in the output/cache key. Arbitrary
+execution-time arguments either need an isolated non-cached result area or must
+be rejected; they must not silently share a target's output directory.
+
+Keep JUnit and any other declared result artifacts separate from nextest's
+persistent rerun store. Test concurrent runs, cache hits, cleanup, `buck
+clean`, and remote-like execution before promising result persistence.
+
+**Deliverable:** a documented ownership and lifecycle contract for results,
+persistent rerun records, scratch files, output identity, caching, and remote
+execution, with a Buck rule/provider shape that declares target-associated
+outputs without treating the whole `buck-out` tree as writable scratch.
+
+### 7. Exercise nextest features against Buck2 metadata
+
+Once basic execution and output ownership are stable, validate features that
+depend on runtime and identity metadata:
 
 - Retries.
 - Timeouts.
@@ -161,7 +210,7 @@ identity metadata:
 Each feature needs an explicit acceptance test. Do not assume Cargo behavior
 continues to hold when artifacts and metadata come from Buck2.
 
-### 7. Validate sandboxing and remote-like execution
+### 8. Validate sandboxing and remote-like execution
 
 Repeat the artifact/path experiment in a constrained sandbox:
 
@@ -176,7 +225,7 @@ Repeat the artifact/path experiment in a constrained sandbox:
 Buck2-declared inputs and outputs, followed by actual remote execution if the
 Buck2 environment supports it.
 
-### 8. Reassess the long-term integration surface
+### 9. Reassess the long-term integration surface
 
 After the compatibility layer is proven, decide whether ordinary nextest CLI
 is sufficient. Possible outcomes are:
