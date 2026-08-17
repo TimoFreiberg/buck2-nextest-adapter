@@ -1,20 +1,52 @@
 #!/bin/sh
 set -eu
 
+artifact=${1:-}
+manifest_input=${2:-}
+generated_manifest=${3:-}
+if [ -z "$artifact" ] || [ -z "$manifest_input" ] || [ -z "$generated_manifest" ]; then
+    printf '%s\n' 'validate_manifest_cases: expected artifact, manifest input, and generated manifest' >&2
+    exit 2
+fi
+for omitted in artifact manifest generated; do
+    set +e
+    case "$omitted" in
+        artifact) "$0" >"${TMPDIR:-/tmp}/validate-manifest-$omitted.out" 2>&1 ;;
+        manifest) "$0" "$artifact" >"${TMPDIR:-/tmp}/validate-manifest-$omitted.out" 2>&1 ;;
+        generated) "$0" "$artifact" "$manifest_input" >"${TMPDIR:-/tmp}/validate-manifest-$omitted.out" 2>&1 ;;
+    esac
+    status=$?
+    set -e
+    [ "$status" -eq 2 ]
+    grep -Fx 'validate_manifest_cases: expected artifact, manifest input, and generated manifest' "${TMPDIR:-/tmp}/validate-manifest-$omitted.out"
+done
 root=$(mktemp -d "${TMPDIR:-/tmp}/manifest-cases.XXXXXX")
 trap 'rm -rf "$root"' EXIT
 mkdir -p "$root/bin" "$root/work" "$root/runtime"
-artifact=${1:-}
-if [ -n "$artifact" ]; then
-    cp "$artifact" "$root/bin/buck2_nextest_rust_test"
-else
-    printf '#!/bin/sh\n' > "$root/bin/buck2_nextest_rust_test"
-fi
+cp "$artifact" "$root/bin/buck2_nextest_rust_test"
 chmod +x "$root/bin/buck2_nextest_rust_test"
 printf 'buck2-nextest-artifact-runtime-v1\n' > "$root/runtime/buck2_artifact_runtime.txt"
-cp artifact-manifest.example.json "$root/manifest.json"
-python3 tools/nextest_artifact.py validate-manifest --manifest "$root/manifest.json" --root "$root" --allow-missing
-python3 tools/nextest_artifact.py validate-manifest --manifest "$root/manifest.json" --root "$root" >/dev/null
+resource_root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-.}
+validator=$resource_root/tools/nextest_artifact.py
+example_manifest=$resource_root/artifact-manifest.example.json
+cp "$manifest_input" "$root/manifest-input.json"
+cp "$example_manifest" "$root/manifest.json"
+python3 "$validator" validate-manifest --manifest "$root/manifest-input.json" --root "$root" --allow-missing
+python3 "$validator" validate-manifest --manifest "$root/manifest.json" --root "$root"
+python3 "$validator" validate-manifest --manifest "$generated_manifest" --root "$root" --allow-missing
+python3 - "$root/manifest-input.json" "$root/manifest.json" "$generated_manifest" <<'PY'
+import json
+import sys
+expected = [
+    {"name": "pass_case", "ignored": False},
+    {"name": "fail_case", "ignored": False},
+    {"name": "ignored_case", "ignored": True},
+    {"name": "timeout_case", "ignored": False},
+]
+for path in sys.argv[1:]:
+    value = json.load(open(path))
+    assert value["artifact"]["test_cases"] == expected, path
+PY
 
 run_case() {
     name=$1
@@ -59,15 +91,15 @@ def write(name, cases):
     value["artifact"]["test_cases"] = cases
     (root / f"{name}.json").write_text(json.dumps(value))
 
-write("record_type", ["pass_case", "fail_case", "ignored_case"])
-write("record_missing_name", [{"ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
-write("record_unknown_field", [{"name": "pass_case", "ignored": False, "extra": 1}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
-write("record_empty_name", [{"name": "", "ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
-write("record_duplicate", [{"name": "pass_case", "ignored": False}, {"name": "pass_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
-write("record_invalid_bool", [{"name": "pass_case", "ignored": 0}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
-write("record_missing", [{"name": "pass_case", "ignored": False}, {"name": "fail_case", "ignored": False}])
-write("record_extra", [{"name": "pass_case", "ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "extra_case", "ignored": False}])
-write("record_reordered", [{"name": "fail_case", "ignored": False}, {"name": "pass_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
+write("record_type", ["pass_case", "fail_case", "ignored_case", "timeout_case"])
+write("record_missing_name", [{"ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}])
+write("record_unknown_field", [{"name": "pass_case", "ignored": False, "extra": 1}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}])
+write("record_empty_name", [{"name": "", "ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}])
+write("record_duplicate", [{"name": "pass_case", "ignored": False}, {"name": "pass_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}])
+write("record_invalid_bool", [{"name": "pass_case", "ignored": 0}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}])
+write("record_missing", [{"name": "pass_case", "ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}])
+write("record_extra", [{"name": "pass_case", "ignored": False}, {"name": "fail_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}, {"name": "extra_case", "ignored": False}])
+write("record_reordered", [{"name": "fail_case", "ignored": False}, {"name": "pass_case", "ignored": False}, {"name": "ignored_case", "ignored": True}, {"name": "timeout_case", "ignored": False}])
 PY
 for case in record_type record_missing_name record_unknown_field record_empty_name record_duplicate record_invalid_bool record_missing record_extra record_reordered; do
     run_case "$case" "$(cat "$root/$case.json")"

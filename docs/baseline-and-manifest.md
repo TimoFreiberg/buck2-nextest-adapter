@@ -33,11 +33,12 @@ Official references include [machine-readable list](https://nexte.st/docs/machin
 [
   {"name": "pass_case", "ignored": false},
   {"name": "fail_case", "ignored": false},
-  {"name": "ignored_case", "ignored": true}
+  {"name": "ignored_case", "ignored": true},
+  {"name": "timeout_case", "ignored": false}
 ]
 ```
 
-Each testcase value must be a record with exactly `name` and `ignored`; names must be nonempty strings and unique, and ignored values must be JSON booleans. Missing, extra, duplicate, reordered, mistyped, or unknown fields are rejected. The supported binary identity and the ordered records must match exactly. Synthetic test metadata derives its testcase map, ignored flags, and count `3` from the validated records.
+Each testcase value must be a record with exactly `name` and `ignored`; names must be nonempty strings and unique, and ignored values must be JSON booleans. Missing, extra, duplicate, reordered, mistyped, or unknown fields are rejected. The supported binary identity and the ordered records must match exactly. Synthetic test metadata derives its testcase map, ignored flags, and count `4` from the validated records.
 
 The manifest also contains rooted relative executable, working-directory, and static-runtime-input paths; a manifest-driven string environment; target triple/features; and an empty `build.generated_outputs`. Unknown versions and extra/missing top-level fields fail closed. Paths cannot be absolute, contain unsafe components, traverse symlinks, overlap protected paths, or resolve outside the private root. Adapter-owned environment and path names are rejected.
 
@@ -49,7 +50,7 @@ Schema v1 is intentionally evolved in place while it remains repository-local an
 
 The adapter stages every declared runtime input under one private root, validates the manifest before and after staging, applies the manifest environment, synthesizes metadata, verifies declared/staged executable SHA-256 equality, and uses source-denial wrappers to prove no nested Cargo build or compiler invocation occurs. `cargo nextest list` is machine-readable discovery validation only, not a result protocol.
 
-For runs, a private `.config/nextest.toml` defines profile `ci` and `junit.path = "junit.xml"`. The ignored-only scenario adds `report-skipped = "ignored"` and `--no-tests pass`, making the selected ignored case appear as `<skipped>` while the run remains successful. Other scenarios use the default skipped-report policy, so filtered-out cases remain absent. This behavior is verified against captured nextest 0.9.143 and is not silently generalized to other versions.
+For runs, a private `.config/nextest.toml` defines profile `ci` and `junit.path = "junit.xml"`. The ignored-only scenario adds `report-skipped = "ignored"` and `--no-tests pass`, making the selected ignored case appear as `<skipped>` while the run remains successful. The closed timeout regression scenario additionally uses `slow-timeout = { period = "1s", terminate-after = 1, grace-period = "0s" }` in the parent `ci` profile, selects only `timeout_case`, and expects status `100` with one JUnit `<failure>` and no timeout-specific marker. Other scenarios use the default skipped-report policy, so filtered-out cases remain absent. This behavior is verified against captured nextest 0.9.143 and is not silently generalized to other versions.
 
 Nextest writes JUnit beneath the private workspace. After the child exits, the adapter saves its status, verifies any emitted report as XML, copies the bytes to a mode-0600 same-directory temporary beside the caller destination, and atomically renames it. The report therefore survives private-root cleanup, and the adapter does not rewrite or add XML elements. Byte-digest tests compare a trusted private nextest report with the exported file.
 

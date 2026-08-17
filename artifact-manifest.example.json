@@ -16,6 +16,10 @@
       {
         "ignored": true,
         "name": "ignored_case"
+      },
+      {
+        "ignored": false,
+        "name": "timeout_case"
       }
     ]
   },

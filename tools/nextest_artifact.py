@@ -23,6 +23,7 @@ CASES = [
     {"name": "pass_case", "ignored": False},
     {"name": "fail_case", "ignored": False},
     {"name": "ignored_case", "ignored": True},
+    {"name": "timeout_case", "ignored": False},
 ]
 BASELINE_OBSERVED_CASES = ["pass_case", "fail_case"]
 

@@ -8,7 +8,8 @@
     "test_cases": [
       {"name": "pass_case", "ignored": false},
       {"name": "fail_case", "ignored": false},
-      {"name": "ignored_case", "ignored": true}
+      {"name": "ignored_case", "ignored": true},
+      {"name": "timeout_case", "ignored": false}
     ]
   },
   "paths": {

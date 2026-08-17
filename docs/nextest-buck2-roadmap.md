@@ -14,7 +14,7 @@ Buck2 rust_test
 ```
 
 The adapter supports only the Buck artifact path. Its strict identity contains
-`pass_case`, `fail_case`, and ignored `ignored_case`; the separate two-case Cargo
+`pass_case`, `fail_case`, ignored `ignored_case`, and non-ignored `timeout_case`; the separate two-case Cargo
 fixture remains baseline observation/regeneration input only. Phase 4 staging,
 rooted paths, runtime/cwd/environment, source denial, digest equality, synthetic
 metadata, and once-only cleanup remain covered.
@@ -145,15 +145,17 @@ Completed in the first bounded milestone:
   summaries, and invented event streams.
 
 The completed-timeout boundary is intentionally ordinary test failure/JUnit
-`<failure>`; no timeout-specific marker is invented. Stable interruption, abort,
-and cancellation mapping remains a Phase 5 follow-up because nextest 0.9.143 and
+`<failure>`; the deterministic `timeout_case` fixture and bounded profile
+regression are now complete, and no timeout-specific marker is invented. Stable
+interruption, abort, and cancellation mapping remains deferred because nextest 0.9.143 and
 the current host do not provide the required stable machine-readable and
 process-group test boundary.
 
 **Bounded deliverable:** documented JUnit/status rules and fixture coverage for
-pass, failure, ignored/skipped, filtered, and no-tests-selected behavior. Distinct
-timeout observation and abort/cancel mapping are explicit follow-ups, not implied
-coverage.
+pass, failure, ignored/skipped, filtered, no-tests-selected, and deterministic
+completed-timeout behavior. Interruption/abort/cancel mapping remains explicitly
+deferred pending a supported machine-readable/process-group contract and suitable
+environment.
 
 ### 6. Define output and run-state ownership
 
@@ -242,9 +244,9 @@ not on the initial Cargo fixture.
 
 ## Recommended immediate next step
 
-Keep the completed JUnit/status boundary stable and investigate the remaining
-Phase 5 lifecycle gaps separately: add a deterministic completed-timeout fixture
-to confirm its ordinary failure classification, and revisit interruption/abort/
-cancel mapping only when a supported nextest machine-readable contract or a
-process-group-capable test environment is available. Keep retries, remote
-execution, direct embedding, and richer event protocols as later phases.
+Keep the completed JUnit/status boundary stable. The deterministic completed-timeout
+fixture is the bounded follow-up now complete; revisit interruption/abort/cancel
+mapping only when a supported nextest machine-readable contract or a
+process-group-capable test environment is available. Keep retries, groups, output
+and run-state ownership, remote execution, direct embedding, and richer event
+protocols as later phases.

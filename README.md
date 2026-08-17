@@ -7,7 +7,7 @@ This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds 
 - Buck2 with the bundled prelude `rust_test` rule.
 - Rust and Cargo.
 - `cargo-nextest` 0.9.143, exposing metadata/remap, filterset, output, profile, and no-tests controls used here.
-- Python 3 for strict manifest, metadata, XML-test, and baseline tooling.
+- Python 3.11+ for strict manifest, metadata, XML-test, baseline tooling, and timeout profile assertions.
 
 No toolchain provisioning is included. `setsid` is needed only for process-group signal-cleanup coverage. The current macOS host does not provide it, so that test reports the prerequisite blocker rather than claiming unsupported coverage.
 
@@ -24,7 +24,7 @@ adapter.sh buck-artifact \
   --binary-baseline PATH \
   --tests-baseline PATH \
   --junit-report PATH \
-  [--scenario pass|fail|ignored|filtered|no-tests]
+  [--scenario pass|fail|ignored|filtered|no-tests|timeout]
 ```
 
 Every input and the report destination are validated before any `cargo nextest` help probe or dispatch. A relative report path is resolved against the adapter invocation directory. Existing parent components must be real directories, not symlinks; the destination may be absent or an existing regular file, but may not be a directory or symlink. Parents are not created. Export uses a mode-0600 same-directory temporary and atomic replacement, so the last successful export wins.
@@ -40,6 +40,7 @@ The bounded result contract follows nextest's process boundary:
 - `ignored`: selects `ignored_case`, exports it as `<skipped>`, returns `0`.
 - `filtered`: selects only `pass_case`; `fail_case` and `ignored_case` are absent, returns `0`.
 - `no-tests`: uses an unmatched filter and `--no-tests fail`, returns `4`. If nextest emits no JUnit, the destination may remain absent; XML is never synthesized.
+- `timeout`: development/regression coverage selects `timeout_case` with a closed one-second nextest slow-timeout profile; the completed timeout is ordinary status `100` with a JUnit `<failure>` and no timeout-specific marker. This is not a general timeout configuration API.
 
 Completed pass and test-failure runs require a valid exported report. Other setup/metadata/unknown nonzero statuses retain their raw nextest status and export a report if one exists. A required post-dispatch verification/export failure returns adapter status `3` and prints the raw nextest status; pre-dispatch validation returns `2`. Human-readable nextest output remains diagnostic, not a protocol.
 
@@ -54,7 +55,8 @@ buck2 test --test-executor-stdout=- --test-executor-stderr=- \
   //:nextest_buck_artifact_expected_failure \
   //:nextest_buck_artifact_status_ignored \
   //:nextest_buck_artifact_status_filtered \
-  //:nextest_buck_artifact_status_no-tests
+  //:nextest_buck_artifact_status_no-tests \
+  //:nextest_buck_artifact_status_timeout
 buck2 test --test-executor-stdout=- --test-executor-stderr=- //:legacy_path_absent
 buck2 test --test-executor-stdout=- --test-executor-stderr=- //:documentation_smoke
 ```
@@ -69,11 +71,12 @@ Schema version 1 is experimental/pre-release and evolves in place. `artifact.tes
 [
   {"name": "pass_case", "ignored": false},
   {"name": "fail_case", "ignored": false},
-  {"name": "ignored_case", "ignored": true}
+  {"name": "ignored_case", "ignored": true},
+  {"name": "timeout_case", "ignored": false}
 ]
 ```
 
-Ordering and exact fields are significant. Synthetic Buck metadata is derived from these three records.
+Ordering and exact fields are significant. Synthetic Buck metadata is derived from these four records.
 
 The checked-in Cargo fixture and `tools/capture_cargo_nextest_baseline.sh` are observation/regeneration inputs only, not a supported execution path or runtime resource. Their normalized observation intentionally remains two cases (`pass_case`, `fail_case`) across two Cargo integration-test binaries plus one library binary. See [`docs/baseline-and-manifest.md`](docs/baseline-and-manifest.md) for the strict contract and [`docs/nextest-buck2-roadmap.md`](docs/nextest-buck2-roadmap.md) for completed and deferred phases.
 

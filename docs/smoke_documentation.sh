@@ -13,6 +13,7 @@ grep -F '## Canonical invocation' "$readme" >/dev/null
 grep -F '`buck-artifact` is the only supported adapter mode' "$readme" >/dev/null
 grep -F -- '--junit-report PATH' "$readme" >/dev/null
 grep -F 'copies the nextest bytes unchanged' "$readme" >/dev/null
+grep -F 'Python 3.11+' "$readme" >/dev/null
 grep -F 'no-tests' "$readme" >/dev/null
 grep -F 'returns `100`' "$readme" >/dev/null
 grep -F 'Process interruption, abort, and cancellation have no stable adapter classification' "$readme" >/dev/null
@@ -22,14 +23,17 @@ grep -Fi 'experimental' "$baseline" >/dev/null
 grep -Fi 'pre-release' "$baseline" >/dev/null
 grep -F '{"name": "ignored_case", "ignored": true}' "$baseline" >/dev/null
 grep -F 'test count `2`' "$baseline" >/dev/null
-grep -F 'count `3`' "$baseline" >/dev/null
+grep -F 'count `4`' "$baseline" >/dev/null
+grep -F 'timeout_case' "$baseline" >/dev/null
+grep -F 'slow-timeout = { period = "1s", terminate-after = 1, grace-period = "0s" }' "$baseline" >/dev/null
+grep -F 'no timeout-specific marker' "$baseline" >/dev/null
 grep -F 'mode-0600 same-directory temporary' "$baseline" >/dev/null
 grep -F 'raw nextest status=<status>' "$baseline" >/dev/null
 
 grep -F '## Current position' "$roadmap" >/dev/null
 grep -F 'first bounded Phase 5 milestone is complete' "$roadmap" >/dev/null
 grep -F 'filtered-out absence' "$roadmap" >/dev/null
-grep -F 'no distinct XML marker' "$roadmap" >/dev/null
+grep -F 'no timeout-specific marker' "$roadmap" >/dev/null
 grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
 grep -F 'Keep the completed JUnit/status boundary stable' "$roadmap" >/dev/null
 

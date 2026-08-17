@@ -99,7 +99,7 @@ sh_test(
         ],
         resources = [":nextest_buck_artifact_runner", "buck_artifact_status.sh"],
     )
-    for scenario in ["ignored", "filtered", "no-tests"]
+    for scenario in ["ignored", "filtered", "no-tests", "timeout"]
 ]
 
 [
@@ -121,7 +121,7 @@ sh_test(
             "buck_artifact_export_fault.sh",
         ],
     )
-    for subcase in ["pre-dispatch", "success-export-failure", "failure-export-failure", "malformed-report", "list-failure"]
+    for subcase in ["pre-dispatch", "success-export-failure", "failure-export-failure", "malformed-report", "list-failure", "timeout-capture"]
 ]
 
 sh_test(
@@ -175,8 +175,17 @@ sh_test(
 sh_test(
     name = "validate_artifact_manifest",
     test = "validate_manifest_cases.sh",
-    args = ["$(location :buck2_nextest_rust_test)"],
-    resources = ["artifact-manifest.example.json", "tools/nextest_artifact.py"],
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(source tools/manifest-input.json)",
+        "$(location :buck2_nextest_artifact_manifest)",
+    ],
+    resources = [
+        "artifact-manifest.example.json",
+        "tools/manifest-input.json",
+        "tools/nextest_artifact.py",
+        ":buck2_nextest_artifact_manifest",
+    ],
 )
 
 sh_test(

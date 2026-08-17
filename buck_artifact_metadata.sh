@@ -19,9 +19,9 @@ python3 - "$tmp/meta/tests-metadata.json" "$tests_baseline" "$binary_baseline" "
 import json, sys
 synthetic, tests, binaries, summary = map(lambda p: json.load(open(p)), sys.argv[1:])
 suite = synthetic['rust-suites']['buck2_nextest_rust_test']
-assert synthetic['test-count'] == 3
-assert list(suite['testcases']) == ['pass_case', 'fail_case', 'ignored_case']
-assert [suite['testcases'][n]['ignored'] for n in suite['testcases']] == [False, False, True]
+assert synthetic['test-count'] == 4
+assert list(suite['testcases']) == ['pass_case', 'fail_case', 'ignored_case', 'timeout_case']
+assert [suite['testcases'][n]['ignored'] for n in suite['testcases']] == [False, False, True, False]
 assert tests['test-count'] == 2
 assert len(binaries['rust-binaries']) == 3
 assert summary['observed_test_cases'] == ['pass_case', 'fail_case']

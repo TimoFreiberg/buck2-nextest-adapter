@@ -10,7 +10,7 @@ final_status=2
 pending_signal=
 
 usage() {
-    printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--scenario pass|fail|ignored|filtered|no-tests]' >&2
+    printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--scenario pass|fail|ignored|filtered|no-tests|timeout]' >&2
 }
 
 cleanup_and_exit() {
@@ -135,6 +135,7 @@ case "$scenario" in
     pass|filtered) filterset='test(=pass_case)'; no_tests= ;;
     fail) filterset='test(=fail_case)'; no_tests= ;;
     ignored) filterset='test(=ignored_case)'; no_tests='--no-tests pass' ;;
+    timeout) filterset='test(=timeout_case)'; no_tests= ;;
     no-tests) filterset='test(=does_not_exist)'; no_tests='--no-tests fail' ;;
     *) fail "invalid scenario: $scenario" ;;
 esac
@@ -239,10 +240,15 @@ chmod +x "$private_root/target/debug/deps/buck2_nextest_rust_test" || fail 'coul
 eval "$(python3 "$private_root/nextest_artifact.py" emit-environment --manifest "$private_root/manifest.json" --root "$private_root")" || fail 'could not apply manifest environment'
 
 printf '%s\n' '[package]' 'name = "buck2-nextest-buck-artifact"' 'version = "0.1.0"' 'edition = "2021"' >"$private_root/workspace/Cargo.toml" || fail 'could not write staged Cargo manifest'
-if [ "$scenario" = ignored ]; then
+if [ "$scenario" = timeout ]; then
+    printf '%s\n' '[profile.ci]' 'slow-timeout = { period = "1s", terminate-after = 1, grace-period = "0s" }' '[profile.ci.junit]' 'path = "junit.xml"' >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest timeout profile'
+elif [ "$scenario" = ignored ]; then
     printf '%s\n' '[profile.ci.junit]' 'path = "junit.xml"' 'report-skipped = "ignored"' >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest JUnit profile'
 else
     printf '%s\n' '[profile.ci.junit]' 'path = "junit.xml"' >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest JUnit profile'
+fi
+if [ -n "${BUCK2_NEXTEST_PROFILE_CAPTURE:-}" ]; then
+    cp "$private_root/workspace/.config/nextest.toml" "$BUCK2_NEXTEST_PROFILE_CAPTURE" || fail 'could not capture nextest profile'
 fi
 
 export CARGO_NET_OFFLINE=true
@@ -318,6 +324,7 @@ grep -F 'buck2_nextest_rust_test' "$private_root/list.json" >/dev/null 2>&1 || f
 grep -F 'pass_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'pass_case was not listed'
 grep -F 'fail_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'fail_case was not listed'
 grep -F 'ignored_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'ignored_case was not listed'
+grep -F 'timeout_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'timeout_case was not listed'
 
 printf 'buck2-nextest-adapter: exec cargo nextest run --profile ci --filterset %s (supplied metadata)\n' "$filterset"
 output_mode=--success-output

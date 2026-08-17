@@ -21,3 +21,13 @@ fn fail_case() {
 fn ignored_case() {
     println!("buck2-nextest-artifact: ignored-test");
 }
+
+#[test]
+fn timeout_case() {
+    if let Ok(marker) = std::env::var("BUCK2_NEXTEST_TIMEOUT_READINESS") {
+        let mut file = std::fs::File::create(marker).expect("timeout readiness marker");
+        use std::io::Write;
+        file.write_all(b"ready\n").expect("timeout readiness payload");
+    }
+    std::thread::sleep(std::time::Duration::from_secs(10));
+}

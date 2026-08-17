@@ -45,6 +45,10 @@ case "$subcase" in
         [ "$raw" -eq 0 ]
         grep -F 'not valid XML' "$tmp/fault/out" >/dev/null
         ;;
+    timeout-capture)
+        raw=$(BUCK2_NEXTEST_EXPORT_FAULT_ACTION=capture "$root/buck_artifact_export_fault.sh" timeout "$root/adapter.sh" "$tmp/timeout-fault" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline")
+        [ "$raw" -eq 100 ]
+        ;;
     list-failure)
         : >"$tmp/dispatch.log"
         set +e
