@@ -24,7 +24,7 @@ root = ET.parse(sys.argv[1]).getroot()
 cases = root.findall('.//testcase')
 names = [case.get('name') for case in cases]
 assert names == ['pass_case'], names
-assert cases[0].find('failure') is None
+assert [child.tag for child in cases[0] if child.tag in {'failure', 'error', 'skipped'}] == []
 assert not root.findall('.//adapter-summary')
 PY
 grep -F 'runtime=declared content=buck2-nextest-artifact-runtime-v1' "$out"

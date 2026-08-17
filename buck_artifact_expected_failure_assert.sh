@@ -24,7 +24,7 @@ root = ET.parse(sys.argv[1]).getroot()
 cases = root.findall('.//testcase')
 names = [case.get('name') for case in cases]
 assert names == ['fail_case'], names
-assert cases[0].find('failure') is not None
+assert [child.tag for child in cases[0] if child.tag in {'failure', 'error', 'skipped'}] == ['failure']
 assert not root.findall('.//adapter-summary')
 PY
 grep -F 'test(=fail_case)' "$out"

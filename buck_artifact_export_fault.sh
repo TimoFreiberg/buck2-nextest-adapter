@@ -26,6 +26,7 @@ cp "$internal" "$trusted"
 case "${BUCK2_NEXTEST_EXPORT_FAULT_ACTION:-remove}" in
     capture) ;;
     remove) mv "$internal" "$internal.removed" ;;
+    malformed) printf '%s\n' '<testsuites' >"$internal" ;;
     *) printf 'invalid fault action\n' >&2; exit 2 ;;
 esac
 rm -f "$gate"

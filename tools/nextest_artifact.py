@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from typing import Any
@@ -435,6 +436,60 @@ def emit_environment(args: argparse.Namespace) -> None:
         print(f"export {name}={shlex.quote(value)}")
 
 
+def export_report(args: argparse.Namespace) -> None:
+    source = Path(args.source)
+    destination = Path(args.destination)
+    if not destination.is_absolute():
+        die("report destination must be absolute")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(os.sep, flags)
+    temp_name: str | None = None
+    try:
+        for component in destination.parent.parts[1:]:
+            next_fd = os.open(component, flags | nofollow, dir_fd=directory_fd)
+            os.close(directory_fd)
+            directory_fd = next_fd
+        destination_name = destination.name
+        try:
+            existing = os.stat(destination_name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            existing = None
+        if existing is not None and not stat.S_ISREG(existing.st_mode):
+            die("report destination must be a regular file when it exists")
+        for attempt in range(100):
+            candidate = f".{destination_name}.tmp.{os.getpid()}.{attempt}"
+            try:
+                temp_fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600, dir_fd=directory_fd)
+            except FileExistsError:
+                continue
+            temp_name = candidate
+            break
+        else:
+            die("could not create same-directory report temporary")
+        with source.open("rb") as input_stream, os.fdopen(temp_fd, "wb") as output_stream:
+            shutil.copyfileobj(input_stream, output_stream)
+            output_stream.flush()
+            os.fsync(output_stream.fileno())
+        try:
+            existing = os.stat(destination_name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            existing = None
+        if existing is not None and not stat.S_ISREG(existing.st_mode):
+            die("report destination changed to a non-regular file")
+        os.replace(temp_name, destination_name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+        temp_name = None
+    except (OSError, ValueError) as exc:
+        die(f"could not atomically export JUnit report: {exc}")
+    finally:
+        if temp_name is not None:
+            try:
+                os.unlink(temp_name, dir_fd=directory_fd)
+            except OSError:
+                pass
+        os.close(directory_fd)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -477,6 +532,10 @@ def main() -> None:
     p.add_argument("--manifest", required=True)
     p.add_argument("--root", required=True)
     p.set_defaults(func=emit_environment)
+    p = sub.add_parser("export-report")
+    p.add_argument("--source", required=True)
+    p.add_argument("--destination", required=True)
+    p.set_defaults(func=export_report)
     args = parser.parse_args()
     args.func(args)
 

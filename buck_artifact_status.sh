@@ -27,7 +27,7 @@ import xml.etree.ElementTree as ET
 root = ET.parse(sys.argv[1]).getroot()
 cases = root.findall('.//testcase')
 assert [c.get('name') for c in cases] == ['ignored_case']
-assert cases[0].find('skipped') is not None
+assert [child.tag for child in cases[0] if child.tag in {'failure', 'error', 'skipped'}] == ['skipped']
 PY
         ;;
     filtered)
@@ -39,8 +39,7 @@ import xml.etree.ElementTree as ET
 root = ET.parse(sys.argv[1]).getroot()
 cases = root.findall('.//testcase')
 assert [c.get('name') for c in cases] == ['pass_case']
-assert cases[0].find('failure') is None
-assert cases[0].find('skipped') is None
+assert [child.tag for child in cases[0] if child.tag in {'failure', 'error', 'skipped'}] == []
 PY
         ;;
     no-tests)

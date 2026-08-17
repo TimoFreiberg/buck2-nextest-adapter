@@ -63,7 +63,6 @@ scenario=pass
 artifact=${BUCK2_NEXTEST_ARTIFACT:-}
 manifest_input=${BUCK2_NEXTEST_MANIFEST:-}
 validator=${BUCK2_NEXTEST_VALIDATOR:-}
-baseline_dir=${BUCK2_NEXTEST_BASELINE:-}
 baseline_cargo=${BUCK2_NEXTEST_CARGO_BASELINE:-}
 baseline_binaries=${BUCK2_NEXTEST_BINARY_BASELINE:-}
 baseline_tests=${BUCK2_NEXTEST_TESTS_BASELINE:-}
@@ -92,12 +91,6 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || fail '--validator requires a value'
             [ -z "$validator" ] || fail 'validator specified more than once'
             validator=$2
-            shift 2
-            ;;
-        --baseline)
-            [ "$#" -ge 2 ] || fail '--baseline requires a value'
-            [ -z "$baseline_dir" ] || fail 'baseline specified more than once'
-            baseline_dir=$2
             shift 2
             ;;
         --cargo-baseline)
@@ -149,11 +142,6 @@ esac
 [ -n "$artifact" ] || fail 'buck-artifact requires --artifact or BUCK2_NEXTEST_ARTIFACT'
 [ -n "$manifest_input" ] || fail 'buck-artifact requires --manifest or BUCK2_NEXTEST_MANIFEST'
 [ -n "$validator" ] || fail 'buck-artifact requires --validator or BUCK2_NEXTEST_VALIDATOR'
-if [ -z "$baseline_cargo$baseline_binaries$baseline_tests" ] && [ -n "$baseline_dir" ]; then
-    baseline_cargo=$baseline_dir/cargo-metadata.json
-    baseline_binaries=$baseline_dir/binaries.json
-    baseline_tests=$baseline_dir/tests.json
-fi
 [ -n "$baseline_cargo" ] && [ -n "$baseline_binaries" ] && [ -n "$baseline_tests" ] || fail 'buck-artifact requires all three baseline metadata inputs'
 [ -n "$junit_report" ] || fail 'buck-artifact requires --junit-report PATH'
 [ -x "$artifact" ] && [ -f "$artifact" ] && [ ! -L "$artifact" ] || fail "declared Buck artifact is not an executable regular file: $artifact"
@@ -266,6 +254,14 @@ export BUCK2_NEXTEST_DISPATCH_LOG=${BUCK2_NEXTEST_DISPATCH_LOG:-$private_root/di
 export BUCK2_NEXTEST_PROBE_LOG=${BUCK2_NEXTEST_PROBE_LOG:-$private_root/probe.log}
 export BUCK2_NEXTEST_NESTED_CARGO_LOG=${BUCK2_NEXTEST_NESTED_CARGO_LOG:-$private_root/nested-cargo.log}
 export BUCK2_NEXTEST_COMPILER_LOG=${BUCK2_NEXTEST_COMPILER_LOG:-$private_root/compiler.log}
+for log_name in BUCK2_NEXTEST_DISPATCH_LOG BUCK2_NEXTEST_PROBE_LOG BUCK2_NEXTEST_NESTED_CARGO_LOG BUCK2_NEXTEST_COMPILER_LOG; do
+    eval "log_value=\${$log_name}"
+    case "$log_value" in
+        /*) ;;
+        *) log_value=$invocation_cwd/$log_value ;;
+    esac
+    eval "export $log_name=\$log_value"
+done
 export BUCK2_NEXTEST_DISPATCH_ALLOWED=1
 export PATH="$private_root:$PATH"
 : >"$BUCK2_NEXTEST_DISPATCH_LOG" || fail 'could not initialize dispatch sentinel'
@@ -364,20 +360,8 @@ if [ "$report_exists" = true ]; then
     then
         export_error='nextest JUnit report is not valid XML'
     else
-        report_parent=$(dirname "$junit_report")
-        report_base=$(basename "$junit_report")
-        report_tmp=$(mktemp "$report_parent/.${report_base}.tmp.XXXXXX") || report_tmp=
-        if [ -z "$report_tmp" ]; then
-            export_error='could not create same-directory report temporary'
-        elif ! chmod 600 "$report_tmp"; then
-            export_error='could not restrict report temporary permissions'
-            rm -f "$report_tmp"
-        elif ! cp "$internal_report" "$report_tmp"; then
-            export_error='could not copy nextest JUnit to report temporary'
-            rm -f "$report_tmp"
-        elif ! mv -f "$report_tmp" "$junit_report"; then
-            export_error='could not atomically replace JUnit destination'
-            rm -f "$report_tmp"
+        if ! export_output=$(python3 "$private_root/nextest_artifact.py" export-report --source "$internal_report" --destination "$junit_report" 2>&1); then
+            export_error="${export_output:-could not atomically export JUnit report}"
         fi
     fi
 elif [ "$required" = true ]; then

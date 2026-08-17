@@ -40,6 +40,23 @@ case "$subcase" in
         raw=$(BUCK2_NEXTEST_EXPORT_FAULT_ACTION=remove "$root/buck_artifact_export_fault.sh" fail "$root/adapter.sh" "$tmp/fault" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline")
         [ "$raw" -eq 100 ]
         ;;
+    malformed-report)
+        raw=$(BUCK2_NEXTEST_EXPORT_FAULT_ACTION=malformed "$root/buck_artifact_export_fault.sh" pass "$root/adapter.sh" "$tmp/fault" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline")
+        [ "$raw" -eq 0 ]
+        grep -F 'not valid XML' "$tmp/fault/out" >/dev/null
+        ;;
+    list-failure)
+        : >"$tmp/dispatch.log"
+        set +e
+        BUCK2_NEXTEST_LIST_FAULT_STATUS=42 BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" >"$tmp/out" 2>&1
+        status=$?
+        set -e
+        [ "$status" -eq 42 ]
+        grep -F 'nextest list failed status=42' "$tmp/out" >/dev/null
+        grep -F 'top-level cargo nextest dispatch: nextest list' "$tmp/dispatch.log" >/dev/null
+        ! grep -F 'top-level cargo nextest dispatch: nextest run' "$tmp/dispatch.log" >/dev/null
+        [ "$(grep -c 'cleanup=once' "$tmp/out")" -eq 1 ]
+        ;;
     *) printf 'unknown report destination subcase: %s\n' "$subcase" >&2; exit 2 ;;
 esac
 printf 'buck artifact report destination %s: passed\n' "$subcase"

@@ -19,8 +19,13 @@ filegroup(
         "baseline/normalized/cargo-metadata.json",
         "baseline/normalized/binaries.json",
         "baseline/normalized/tests.json",
-        "baseline/normalized/summary.json",
     ],
+    copy = False,
+)
+
+filegroup(
+    name = "baseline_summary",
+    srcs = ["baseline/normalized/summary.json"],
     copy = False,
 )
 
@@ -116,7 +121,7 @@ sh_test(
             "buck_artifact_export_fault.sh",
         ],
     )
-    for subcase in ["pre-dispatch", "success-export-failure", "failure-export-failure"]
+    for subcase in ["pre-dispatch", "success-export-failure", "failure-export-failure", "malformed-report", "list-failure"]
 ]
 
 sh_test(
@@ -163,6 +168,7 @@ sh_test(
         "buck_artifact_metadata.sh",
         "runtime/buck2_artifact_runtime.txt",
         ":baseline",
+        ":baseline_summary",
     ],
 )
 
