@@ -1,107 +1,71 @@
 # Cargo baseline and Buck2 artifact manifest
 
-This document records the first local compatibility boundary. It is an
-observation of the installed Cargo/nextest pair, not a promise that nextest's
-machine-readable JSON is a stable upstream schema.
+This document separates two contracts: a captured Cargo/nextest observation used to shape synthetic metadata, and the supported Buck artifact execution contract. The observation is not a promise that nextest's list JSON is a stable upstream schema.
 
-## Baseline capture
-
-Run the reproducible capture from a clean checkout:
+## Baseline observation and regeneration
 
 ```sh
 CARGO_NET_OFFLINE=true ./tools/capture_cargo_nextest_baseline.sh baseline/normalized
 ```
 
-The command copies `fixture/` into a fresh temporary workspace, sets a fresh
-`CARGO_TARGET_DIR`, captures Cargo/rustc/cargo-nextest/Buck2 versions and
-`rustc -vV`, then records:
+The capture script copies `fixture/` into an isolated temporary workspace and records Cargo metadata, nextest binary-only JSON, nextest test-list JSON, exact tool versions, target/platform information, and a fixture digest. The fixture and capture script are observation/regeneration inputs only. They are not an adapter execution mode and are not resources of the canonical runner.
 
-- `cargo metadata --locked --format-version 1`;
-- `cargo nextest list --list-type binaries-only --message-format json`;
-- `cargo nextest list --message-format json`.
+Normalized paths use `<WORKSPACE>` and `<TARGET_DIR>`. The observation intentionally remains:
 
-`CARGO_NET_OFFLINE` defaults to `true`; the fixture is dependency-free and the
-lockfile is required. The command does not write the fixture or its source
-inputs. `fixture-digest.sha256` is a digest over the checked-in fixture names
-and bytes, and is a regression guard rather than a Cargo checksum.
+- `tests.json` test count `2`;
+- observed cases `pass_case` and `fail_case`;
+- two Cargo integration-test binaries (`fail_case`, `pass_case`) plus one library binary.
 
-The normalized files replace temporary workspace and target roots with
-`<WORKSPACE>/fixture` and `<TARGET_DIR>`. The Rust toolchain libdir is recorded
-as a runtime field but remains host-specific and is not used as a checked-in
-absolute path. Stable identity fields are the package/target kind, binary
-ID/name, binary path shape, working directory semantics, test-case names,
-platform triple/features, linked paths, build-script output directories, and
-environment assumptions. The current baseline observes two test binaries,
-`fail_case` and `pass_case`, and two test cases.
+Those facts guard the captured metadata shape. They are not authoritative for Buck testcase identity.
 
-Official references:
+Official references include [machine-readable list](https://nexte.st/docs/machine-readable/list/), [archive/reuse](https://nexte.st/docs/ci-features/archiving/), [running](https://nexte.st/docs/running/), and [JUnit](https://nexte.st/docs/machine-readable/junit/). The installed nextest version is captured because the list JSON is not published as a general compatibility schema.
 
-- [nextest machine-readable list](https://nexte.st/docs/machine-readable/list/)
-- [nextest archive/reuse](https://nexte.st/docs/ci-features/archiving/)
-- [nextest running](https://nexte.st/docs/running/)
+## Schema-v1 Buck contract
 
-Those pages document the command surface and field families, but nextest does
-not publish the JSON as a general compatibility schema. The installed version
-is therefore captured alongside the normalized observation.
-
-## Version 1 manifest (experimental pre-release)
-
-`artifact-manifest.example.json` is the checked-in shape. Version 1 is an
-experimental, pre-release repository-owned contract; after stabilization or
-external consumption, incompatible changes will use version 2. Version 1
-supports exactly one local native Buck2 Rust test artifact:
+`artifact-manifest.example.json` documents the experimental, pre-release schema version 1. It supports exactly one local native Buck Rust test artifact:
 
 - package `buck2-nextest-buck-artifact`;
 - binary ID/name `buck2_nextest_rust_test`;
 - target kind `test`;
-- test cases `pass_case` and `fail_case`;
-- executable, working directory, and runtime inputs as relative paths below one
-  private staging root; this phase proves one static runtime input;
-- a manifest-driven working directory and string environment map;
-- `build.generated_outputs`, present and empty, plus target triple/features.
+- exact ordered testcase records:
 
-The adapter stages every declared static runtime input from
-`BUCK_DEFAULT_RUNTIME_RESOURCES` to the same rooted path below its private root,
-then validates the executable, cwd, and files before dispatch. It applies the
-manifest environment and synthesizes suite metadata with the manifest cwd. The
-fixture proves access to the declared file from that cwd and accepts the valid
-mutation value used by the hermetic scenario.
+```json
+[
+  {"name": "pass_case", "ignored": false},
+  {"name": "fail_case", "ignored": false},
+  {"name": "ignored_case", "ignored": true}
+]
+```
 
-Unknown schema versions and extra or missing fields fail closed. Paths cannot
-be absolute, contain `.`/`..`, be missing, be symlinks, or resolve outside the
-private root. The Python 3 helper uses only the standard library and is
-Buck-declared development/test tooling; Python is not part of the Rust test
-artifact or a future nextest runtime dependency.
+Each testcase value must be a record with exactly `name` and `ignored`; names must be nonempty strings and unique, and ignored values must be JSON booleans. Missing, extra, duplicate, reordered, mistyped, or unknown fields are rejected. The supported binary identity and the ordered records must match exactly. Synthetic test metadata derives its testcase map, ignored flags, and count `3` from the validated records.
 
-Cargo's two integration binaries are deliberately baseline observations. The
-Buck contract maps their test-case union into the one synthetic Buck binary;
-it does not preserve the incidental Cargo target split.
+The manifest also contains rooted relative executable, working-directory, and static-runtime-input paths; a manifest-driven string environment; target triple/features; and an empty `build.generated_outputs`. Unknown versions and extra/missing top-level fields fail closed. Paths cannot be absolute, contain unsafe components, traverse symlinks, overlap protected paths, or resolve outside the private root. Adapter-owned environment and path names are rejected.
 
-## Local handoff
+Schema v1 is intentionally evolved in place while it remains repository-local and pre-release. A future incompatible contract after stabilization or external consumption uses a new version.
 
-The `buck-artifact` adapter mode consumes a declared Buck output, stages it
-under the private root, validates the manifest, synthesizes the Cargo-shaped
-metadata, and supplies that metadata to `cargo nextest list` and `run` with
-`--cargo-metadata`, `--binaries-metadata`, `--target-dir-remap`,
-`--workspace-remap`, and the installed `--build-dir-remap` surface. It does not
-run Cargo build/test to produce the executable. It compares SHA-256 digests of
-the declared Buck output and staged executable and rejects Cargo target-dir
-provenance.
+## Canonical local handoff
 
-The installed nextest 0.9.143 exposes the required flags, including
-`--success-output immediate-final` and `--failure-output immediate-final` for
-deterministic diagnostic output. The adapter's Buck-artifact path uses a private
-Cargo home/manifest root and supplies only synthetic metadata; it never rebuilds
-or rediscovers the Buck artifact through Cargo.
-A true no-discovery claim still requires source-denial wrappers around the
-installed Cargo/nextest dispatch to pass; absence of a printed build line alone
-is not evidence. The lifecycle signal scenario also requires `setsid` (or an
-equivalent launcher) to track a process group. The current macOS host does not
-provide `setsid` on `PATH`, so that scenario is a reported prerequisite blocker
-rather than a weaker cleanup implementation.
+`adapter.sh buck-artifact` is the only supported execution interface. It requires the declared artifact, manifest, validator, three baseline metadata files, and `--junit-report PATH`. Before any cargo-nextest help probe or dispatch, it validates all inputs and resolves a relative report path against the invocation cwd. Existing destination parents must be non-symlink directories; the destination may be absent or an existing regular file, but not a symlink or directory. Parent directories are not created.
 
-Retries, timeouts, groups, JUnit XML, full status mapping, remote-like or remote
-execution, direct nextest embedding, native provider promotion, cancellation
-redesign, generated outputs, shared libraries, and richer event protocols remain
-outside this boundary. JUnit XML is a deferred reporting surface, not discovery
-metadata or an execution protocol.
+The adapter stages every declared runtime input under one private root, validates the manifest before and after staging, applies the manifest environment, synthesizes metadata, verifies declared/staged executable SHA-256 equality, and uses source-denial wrappers to prove no nested Cargo build or compiler invocation occurs. `cargo nextest list` is machine-readable discovery validation only, not a result protocol.
+
+For runs, a private `.config/nextest.toml` defines profile `ci` and `junit.path = "junit.xml"`. The ignored-only scenario adds `report-skipped = "ignored"` and `--no-tests pass`, making the selected ignored case appear as `<skipped>` while the run remains successful. Other scenarios use the default skipped-report policy, so filtered-out cases remain absent. This behavior is verified against captured nextest 0.9.143 and is not silently generalized to other versions.
+
+Nextest writes JUnit beneath the private workspace. After the child exits, the adapter saves its status, verifies any emitted report as XML, copies the bytes to a mode-0600 same-directory temporary beside the caller destination, and atomically renames it. The report therefore survives private-root cleanup, and the adapter does not rewrite or add XML elements. Byte-digest tests compare a trusted private nextest report with the exported file.
+
+## Status and failure precedence
+
+The bounded process contract is:
+
+- success `0` with required JUnit for completed pass runs;
+- no tests selected `4` for the explicit unmatched-filter/`--no-tests fail` scenario, with no synthesized XML and an absent destination permitted if nextest emits none;
+- test failure `100`, including a completed timeout represented by nextest as ordinary failure, with required JUnit;
+- setup, metadata, and unknown nonzero failures retain their raw status and export JUnit if one exists.
+
+If required verification/export fails after dispatch, the adapter returns `3`, prints `raw nextest status=<status>` plus the export error, and cleans once. Pre-dispatch validation returns `2` without a help probe or dispatch. Human-readable output remains diagnostic only. No adapter-owned summary, human-output parser, experimental libtest JSON, internal event stream, timeout-specific XML marker, or invented abort code exists.
+
+Process interruption, abort, and cancellation have no stable adapter classification in this milestone. Process-group cleanup coverage requires `setsid`; on this macOS host its absence is reported as a prerequisite blocker rather than claimed as coverage.
+
+## Deferred scope
+
+Retries, groups, remote-like and remote execution, generated outputs beyond the current empty contract, shared libraries, direct embedding, native provider promotion, richer event protocols, and stable abort/cancel mapping remain later work.

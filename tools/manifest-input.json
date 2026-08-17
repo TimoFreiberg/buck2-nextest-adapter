@@ -5,14 +5,18 @@
     "binary_id": "buck2_nextest_rust_test",
     "binary_name": "buck2_nextest_rust_test",
     "target_kind": "test",
-    "test_cases": ["pass_case", "fail_case"]
+    "test_cases": [
+      {"name": "pass_case", "ignored": false},
+      {"name": "fail_case", "ignored": false},
+      {"name": "ignored_case", "ignored": true}
+    ]
   },
   "paths": {
     "executable": "bin/buck2_nextest_rust_test",
     "working_directory": "work",
     "runtime_inputs": []
   },
-  "environment": {"BUCK2_NEXTEST_RUNTIME": "declared"},
+  "environment": {"BUCK2_ARTIFACT_RUNTIME": "declared"},
   "platform": {"target_triple": "aarch64-apple-darwin", "target_features": "unknown"},
   "build": {"generated_outputs": []}
 }

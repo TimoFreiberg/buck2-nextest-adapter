@@ -1,21 +1,30 @@
 #!/bin/sh
 set -eu
-
-set +e
 resource_root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-.}
 adapter=$resource_root/adapter.sh
-"$adapter" --scenario invalid >/tmp/adapter-invalid.out 2>&1
-s1=$?
-"$adapter" buck-artifact --scenario pass >/tmp/adapter-missing.out 2>&1
-s2=$?
-"$adapter" cargo-fixture buck-artifact >/tmp/adapter-mixed.out 2>&1
-s3=$?
-"$adapter" buck-artifact --manifest-path "$resource_root/fixture/Cargo.toml" >/tmp/adapter-fixture-option.out 2>&1
-s4=$?
-set -e
-[ "$s1" -ne 0 ]
-[ "$s2" -ne 0 ]
-[ "$s3" -ne 0 ]
-[ "$s4" -ne 0 ]
-! grep -F 'exec cargo nextest' /tmp/adapter-invalid.out /tmp/adapter-missing.out /tmp/adapter-mixed.out /tmp/adapter-fixture-option.out
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+run_invalid() {
+    name=$1
+    shift
+    : >"$tmp/$name.probe"
+    : >"$tmp/$name.dispatch"
+    set +e
+    BUCK2_NEXTEST_PROBE_LOG="$tmp/$name.probe" BUCK2_NEXTEST_DISPATCH_LOG="$tmp/$name.dispatch" "$adapter" "$@" >"$tmp/$name.out" 2>&1
+    status=$?
+    set -e
+    [ "$status" -eq 2 ]
+    [ ! -s "$tmp/$name.probe" ]
+    [ ! -s "$tmp/$name.dispatch" ]
+}
+run_invalid missing-mode --scenario pass
+run_invalid legacy cargo-fixture
+run_invalid missing-inputs buck-artifact --scenario pass
+run_invalid missing-report buck-artifact --artifact /missing --manifest /missing --validator /missing --cargo-baseline /missing --binary-baseline /missing --tests-baseline /missing
+run_invalid invalid-scenario buck-artifact --scenario arbitrary
+run_invalid old-option buck-artifact --manifest-path /missing
+grep -F 'required mode is buck-artifact' "$tmp/missing-mode.out"
+grep -F 'unknown option: cargo-fixture' "$tmp/legacy.out"
+grep -F 'invalid scenario' "$tmp/invalid-scenario.out"
+grep -F 'unknown option: --manifest-path' "$tmp/old-option.out"
 printf '%s\n' 'adapter mode validation: passed'

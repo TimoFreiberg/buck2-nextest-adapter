@@ -5,8 +5,18 @@
     "package_name": "buck2-nextest-buck-artifact",
     "target_kind": "test",
     "test_cases": [
-      "pass_case",
-      "fail_case"
+      {
+        "ignored": false,
+        "name": "pass_case"
+      },
+      {
+        "ignored": false,
+        "name": "fail_case"
+      },
+      {
+        "ignored": true,
+        "name": "ignored_case"
+      }
     ]
   },
   "build": {

@@ -2,7 +2,7 @@
 
 ## Current position
 
-The repository now proves a local Buck2-built artifact handoff:
+The repository proves one canonical local Buck2-built artifact handoff:
 
 ```text
 Buck2 rust_test
@@ -10,21 +10,28 @@ Buck2 rust_test
        -> POSIX adapter
             -> supplied Cargo/nextest metadata
                  -> cargo nextest list/run
+                      -> nextest JUnit export
 ```
 
-The legacy Cargo-fixture regression remains available separately. The new path
-proves one native Buck2 Rust executable, synthetic identity for `pass_case` and
-`fail_case`, one static declared runtime input, manifest-driven cwd/environment,
-rooted staging, deterministic diagnostic output controls, metadata-only list/run
-commands for the installed nextest CLI, and exit-status propagation. The Cargo baseline's two
-integration binaries are observations mapped to one Buck-owned binary.
+The adapter supports only the Buck artifact path. Its strict identity contains
+`pass_case`, `fail_case`, and ignored `ignored_case`; the separate two-case Cargo
+fixture remains baseline observation/regeneration input only. Phase 4 staging,
+rooted paths, runtime/cwd/environment, source denial, digest equality, synthetic
+metadata, and once-only cleanup remain covered.
 
-Result reporting, advanced nextest features, and remote execution remain
-unproven. In particular, retries, timeouts, groups, JUnit XML/full status
-mapping, generated outputs, shared libraries, cancellation redesign, direct
-embedding, native provider promotion, and richer event protocols are not part of
-this boundary. JUnit XML is a deferred reporting surface, not discovery metadata
-or an execution protocol. Remote execution remains unproven.
+The first bounded Phase 5 milestone is complete: caller-selected JUnit pass-through
+and nextest process statuses are covered for pass (`0`), test failure (`100`),
+ignored/skipped success, filtered-out absence, and explicit no-tests (`4`). A
+post-dispatch required-export failure is adapter status `3`; pre-dispatch input
+validation is `2`. Human output is diagnostic only.
+
+This does not complete broad Phase 5 or later phases. A completed timeout remains
+an ordinary JUnit `<failure>`/test-failure status with no distinct XML marker.
+Process interruption, abort, and cancellation have no stable dedicated mapping
+and remain deferred until a supported machine-readable/process-group contract
+and test environment exist. Retries, groups, remote execution, generated outputs,
+shared libraries, direct embedding, native provider promotion, and richer event
+protocols also remain unproven.
 
 ## Terminology correction
 
@@ -114,19 +121,29 @@ artifact. Validate, in order:
 filter, runtime, cwd/environment, output, and status assertions. JUnit XML and
 full status mapping are deferred to Phase 5.
 
-### 5. Add result reporting and status mapping
+### 5. Add result reporting and status mapping (bounded milestone complete)
 
-Define the adapter's stable result boundary:
+Completed in the first bounded milestone:
 
-- Preserve nextest's documented process exit semantics.
-- Convert or pass through JUnit XML for Buck2/CI ingestion.
-- Define behavior for skipped, ignored, filtered, timed-out, and aborted tests.
-- Keep human-readable output diagnostic only.
-- Do not use experimental libtest JSON, internal event recordings, or an
-  invented event stream as the initial protocol.
+- Preserve nextest's documented process exit semantics for success, test failure,
+  and explicit no-tests selection.
+- Pass through nextest JUnit bytes to a required caller-owned destination before
+  private-root cleanup.
+- Cover pass, failure, ignored/skipped, filtered-out, and no-tests behavior.
+- Keep filtered-out tests absent from JUnit and human output diagnostic only.
+- Avoid experimental libtest JSON, internal event recordings, adapter-owned
+  summaries, and invented event streams.
 
-**Deliverable:** documented status and reporting rules, with fixture coverage
-for pass, failure, skip, timeout, and no-tests-selected behavior.
+The completed-timeout boundary is intentionally ordinary test failure/JUnit
+`<failure>`; no timeout-specific marker is invented. Stable interruption, abort,
+and cancellation mapping remains a Phase 5 follow-up because nextest 0.9.143 and
+the current host do not provide the required stable machine-readable and
+process-group test boundary.
+
+**Bounded deliverable:** documented JUnit/status rules and fixture coverage for
+pass, failure, ignored/skipped, filtered, and no-tests-selected behavior. Distinct
+timeout observation and abort/cancel mapping are explicit follow-ups, not implied
+coverage.
 
 ### 6. Exercise nextest features against Buck2 metadata
 
@@ -176,8 +193,9 @@ not on the initial Cargo fixture.
 
 ## Recommended immediate next step
 
-Start Phase 5 with a bounded reporting and status-design follow-up: define the
-JUnit XML boundary and full skipped/ignored/filtered/timed-out/aborted/no-tests
-status mapping, then add fixture coverage without changing the Phase 4 local
-artifact contract. Keep retries, remote execution, direct embedding, and richer
-event protocols as separate follow-ups.
+Keep the completed JUnit/status boundary stable and investigate the remaining
+Phase 5 lifecycle gaps separately: add a deterministic completed-timeout fixture
+to confirm its ordinary failure classification, and revisit interruption/abort/
+cancel mapping only when a supported nextest machine-readable contract or a
+process-group-capable test environment is available. Keep retries, remote
+execution, direct embedding, and richer event protocols as later phases.

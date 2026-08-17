@@ -8,21 +8,33 @@ baseline=$root/docs/baseline-and-manifest.md
 roadmap=$root/docs/nextest-buck2-roadmap.md
 [ -f "$root/baseline-and-manifest.md" ] && baseline=$root/baseline-and-manifest.md
 [ -f "$root/nextest-buck2-roadmap.md" ] && roadmap=$root/nextest-buck2-roadmap.md
-grep -F '## Buck2-built artifact handoff' "$readme" >/dev/null
-grep -F '## Baseline and manifest contract' "$readme" >/dev/null
+
+grep -F '## Canonical invocation' "$readme" >/dev/null
+grep -F '`buck-artifact` is the only supported adapter mode' "$readme" >/dev/null
+grep -F -- '--junit-report PATH' "$readme" >/dev/null
+grep -F 'copies the nextest bytes unchanged' "$readme" >/dev/null
+grep -F 'no-tests' "$readme" >/dev/null
+grep -F 'returns `100`' "$readme" >/dev/null
+grep -F 'Process interruption, abort, and cancellation have no stable adapter classification' "$readme" >/dev/null
+grep -F 'observation/regeneration inputs only' "$readme" >/dev/null
+
 grep -Fi 'experimental' "$baseline" >/dev/null
 grep -Fi 'pre-release' "$baseline" >/dev/null
-grep -Fi 'one static' "$baseline" >/dev/null
-grep -Fi 'manifest-driven' "$baseline" >/dev/null
-grep -F -- '--success-output' "$readme" >/dev/null
-grep -F -- '--failure-output' "$readme" >/dev/null
-grep -Fi 'JUnit XML' "$baseline" >/dev/null
-grep -Fi 'full status' "$baseline" >/dev/null
-grep -Fi 'future incompatible' "$readme" >/dev/null
-grep -Fi 'retries, timeouts' "$readme" >/dev/null
-grep -Fi 'groups' "$readme" >/dev/null
-grep -Fi 'cancellation redesign' "$readme" >/dev/null
+grep -F '{"name": "ignored_case", "ignored": true}' "$baseline" >/dev/null
+grep -F 'test count `2`' "$baseline" >/dev/null
+grep -F 'count `3`' "$baseline" >/dev/null
+grep -F 'mode-0600 same-directory temporary' "$baseline" >/dev/null
+grep -F 'raw nextest status=<status>' "$baseline" >/dev/null
+
 grep -F '## Current position' "$roadmap" >/dev/null
-grep -F 'Buck2-built artifact handoff' "$roadmap" >/dev/null
-grep -Fi 'remote execution remain' "$roadmap" >/dev/null
+grep -F 'first bounded Phase 5 milestone is complete' "$roadmap" >/dev/null
+grep -F 'filtered-out absence' "$roadmap" >/dev/null
+grep -F 'no distinct XML marker' "$roadmap" >/dev/null
+grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
+grep -F 'Keep the completed JUnit/status boundary stable' "$roadmap" >/dev/null
+
+! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
+! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"
+! grep -F 'JUnit XML is a deferred reporting surface' "$readme" "$baseline" "$roadmap"
+! grep -F 'Start Phase 5 with a bounded reporting' "$roadmap"
 printf '%s\n' 'documentation smoke: passed'

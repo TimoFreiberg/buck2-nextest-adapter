@@ -18,7 +18,12 @@ from typing import Any
 PACKAGE = "buck2-nextest-buck-artifact"
 BINARY_ID = "buck2_nextest_rust_test"
 BINARY_NAME = "buck2_nextest_rust_test"
-CASES = ["pass_case", "fail_case"]
+CASES = [
+    {"name": "pass_case", "ignored": False},
+    {"name": "fail_case", "ignored": False},
+    {"name": "ignored_case", "ignored": True},
+]
+BASELINE_OBSERVED_CASES = ["pass_case", "fail_case"]
 
 
 def die(message: str) -> "NoReturn":
@@ -46,6 +51,33 @@ def expect(value: Any, kind: type, name: str) -> Any:
     if not isinstance(value, kind) or (kind is int and isinstance(value, bool)):
         die(f"{name} must be {kind.__name__}")
     return value
+
+
+def validate_test_cases(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        die("artifact.test_cases must be a list")
+    records: list[dict[str, Any]] = []
+    names: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            die(f"artifact.test_cases[{index}] must be an object")
+        if set(item) != {"name", "ignored"}:
+            die(f"artifact.test_cases[{index}] fields must be exactly ['ignored', 'name']")
+        name = item["name"]
+        if not isinstance(name, str):
+            die(f"artifact.test_cases[{index}].name must be str")
+        if not name:
+            die(f"artifact.test_cases[{index}].name must not be empty")
+        if name in names:
+            die(f"artifact.test_cases contains duplicate name: {name}")
+        names.add(name)
+        ignored = item["ignored"]
+        if type(ignored) is not bool:
+            die(f"artifact.test_cases[{index}].ignored must be bool")
+        records.append({"name": name, "ignored": ignored})
+    if records != CASES:
+        die("artifact.test_cases must exactly match the required ordered records")
+    return records
 
 
 ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -128,12 +160,13 @@ def validate_manifest(path: Path, root: Path, require_paths: bool = True) -> dic
     if data["schema_version"] != 1:
         die("unsupported manifest schema version")
     artifact = expect(data["artifact"], dict, "artifact")
+    records = validate_test_cases(artifact.get("test_cases"))
     expected_artifact = {
         "package_name": PACKAGE,
         "binary_id": BINARY_ID,
         "binary_name": BINARY_NAME,
         "target_kind": "test",
-        "test_cases": CASES,
+        "test_cases": records,
     }
     if artifact != expected_artifact:
         die("manifest artifact identity does not match the Buck contract")
@@ -196,15 +229,16 @@ def validate_manifest(path: Path, root: Path, require_paths: bool = True) -> dic
         die("build.generated_outputs must be empty in manifest schema version 1")
     return {
         "manifest": data,
+        "test_cases": records,
         "executable": executable,
         "working_directory": working,
         "runtime_paths": runtime_paths,
     }
 
 
-def write_json(path: Path, value: Any) -> None:
+def write_json(path: Path, value: Any, *, sort_keys: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(value, indent=2, sort_keys=sort_keys) + "\n", encoding="utf-8")
 
 
 def emit_manifest(args: argparse.Namespace) -> None:
@@ -226,7 +260,7 @@ def emit_manifest(args: argparse.Namespace) -> None:
             "binary_id": BINARY_ID,
             "binary_name": BINARY_NAME,
             "target_kind": "test",
-            "test_cases": CASES,
+            "test_cases": copy.deepcopy(CASES),
         },
         "paths": {
             "executable": "bin/buck2_nextest_rust_test",
@@ -253,7 +287,9 @@ def replace_paths(value: Any, replacements: list[tuple[str, str]]) -> Any:
 
 
 def synthetic_metadata(args: argparse.Namespace) -> None:
-    manifest = validate_manifest(Path(args.manifest), Path(args.manifest_root), require_paths=False)["manifest"]
+    result = validate_manifest(Path(args.manifest), Path(args.manifest_root), require_paths=False)
+    manifest = result["manifest"]
+    records = result["test_cases"]
     platform_data = manifest["platform"]
     baseline_cargo = strict_load(Path(args.cargo_baseline))
     baseline_binary = strict_load(Path(args.binary_baseline))
@@ -327,15 +363,15 @@ def synthetic_metadata(args: argparse.Namespace) -> None:
         "package-name": PACKAGE,
         "status": "listed",
         "testcases": {
-            case: {"filter-match": {"status": "matches"}, "ignored": False, "kind": "test"}
-            for case in CASES
+            record["name"]: {"filter-match": {"status": "matches"}, "ignored": record["ignored"], "kind": "test"}
+            for record in records
         },
     }
-    tests = {"rust-build-meta": build_meta, "rust-suites": {BINARY_ID: suite}, "test-count": 2}
+    tests = {"rust-build-meta": build_meta, "rust-suites": {BINARY_ID: suite}, "test-count": len(records)}
     out = Path(args.output_dir)
     write_json(out / "cargo-metadata.json", cargo)
     write_json(out / "binaries-metadata.json", binaries)
-    write_json(out / "tests-metadata.json", tests)
+    write_json(out / "tests-metadata.json", tests, sort_keys=False)
 
 
 def normalize_baseline(args: argparse.Namespace) -> None:
@@ -366,7 +402,7 @@ def normalize_baseline(args: argparse.Namespace) -> None:
         "schema": 1,
         "observed_package": "buck2-nextest-fixture",
         "observed_test_binaries": ["fail_case", "pass_case"],
-        "observed_test_cases": CASES,
+        "observed_test_cases": BASELINE_OBSERVED_CASES,
         "normalized_paths": {"workspace": "<WORKSPACE>", "target_directory": "<TARGET_DIR>", "rust_libdir": "<RUST_LIBDIR>"},
         "consumed_fields": ["package-id", "package-name", "binary-id", "binary-name", "kind", "binary-path", "cwd", "testcases", "platforms", "linked-paths", "build-script-out-dirs", "environment"],
     }

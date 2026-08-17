@@ -15,3 +15,9 @@ fn fail_case() {
     println!("buck2-nextest-artifact: fail-test");
     assert_eq!(2 + 2, 5);
 }
+
+#[test]
+#[ignore]
+fn ignored_case() {
+    println!("buck2-nextest-artifact: ignored-test");
+}
