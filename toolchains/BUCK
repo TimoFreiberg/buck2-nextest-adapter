@@ -1,4 +1,29 @@
+load(":nextest.bzl", "nextest_system_tool", "nextest_toolchain")
 load("@prelude//toolchains:demo.bzl", "system_demo_toolchains")
-
-# The bundled prelude demo toolchains are sufficient for this local spike.
 system_demo_toolchains()
+
+# These are explicit local tool inputs for the first declared-output milestone.
+# These checked-in paths are local-only wrappers for this repository checkout.
+# They are intentionally not a claim of portability, hermeticity, or remote readiness.
+nextest_system_tool(
+    name = "nextest-cargo",
+    path = "/Users/timo/.cargo/bin/cargo",
+)
+
+nextest_system_tool(
+    name = "nextest-python",
+    path = "/usr/bin/python3",
+)
+
+nextest_system_tool(
+    name = "nextest-cargo-nextest",
+    path = "/Users/timo/.cargo/bin/cargo",
+)
+
+nextest_toolchain(
+    name = "nextest",
+    visibility = ["PUBLIC"],
+    cargo = ":nextest-cargo",
+    python = ":nextest-python",
+    cargo_nextest = ":nextest-cargo-nextest",
+)

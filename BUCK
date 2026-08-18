@@ -5,11 +5,39 @@ filegroup(
 
 filegroup(
     name = "tools",
+    srcs = ["tools/nextest_artifact.py", "tools/cargo_source_denial.sh"],
+    copy = False,
+)
+
+filegroup(
+    name = "validator",
     srcs = ["tools/nextest_artifact.py"],
+    copy = False,
+)
+
+genrule(
+    name = "validator_file",
+    out = "nextest_artifact.py",
+    cmd = "cp tools/nextest_artifact.py $OUT",
+    srcs = ["tools/nextest_artifact.py"],
+)
+
+genrule(
+    name = "source_denial",
+    out = "cargo_source_denial.sh",
+    cmd = "cp tools/cargo_source_denial.sh $OUT && chmod +x $OUT",
+    srcs = ["tools/cargo_source_denial.sh"],
 )
 
 filegroup(
     name = "runtime/buck2_artifact_runtime.txt",
+    srcs = ["runtime/buck2_artifact_runtime.txt"],
+)
+
+genrule(
+    name = "runtime_resource",
+    out = "runtime/buck2_artifact_runtime.txt",
+    cmd = "cp runtime/buck2_artifact_runtime.txt $OUT",
     srcs = ["runtime/buck2_artifact_runtime.txt"],
 )
 
@@ -22,6 +50,29 @@ filegroup(
     ],
     copy = False,
 )
+
+genrule(
+    name = "cargo_baseline",
+    out = "cargo-metadata.json",
+    cmd = "cp baseline/normalized/cargo-metadata.json $OUT",
+    srcs = ["baseline/normalized/cargo-metadata.json"],
+)
+
+genrule(
+    name = "binary_baseline",
+    out = "binaries.json",
+    cmd = "cp baseline/normalized/binaries.json $OUT",
+    srcs = ["baseline/normalized/binaries.json"],
+)
+
+genrule(
+    name = "tests_baseline",
+    out = "tests.json",
+    cmd = "cp baseline/normalized/tests.json $OUT",
+    srcs = ["baseline/normalized/tests.json"],
+)
+
+load(":nextest.bzl", "nextest_buck_artifact_junit")
 
 filegroup(
     name = "baseline_summary",
@@ -40,6 +91,10 @@ genrule(
     out = "artifact-manifest.json",
     cmd = "python3 $(source tools/nextest_artifact.py) emit-manifest --artifact $(location :buck2_nextest_rust_test) --runtime-input runtime/buck2_artifact_runtime.txt --runtime-source $(source runtime/buck2_artifact_runtime.txt) --output $OUT",
     srcs = ["tools/nextest_artifact.py", ":buck2_nextest_rust_test", "runtime/buck2_artifact_runtime.txt"],
+)
+
+nextest_buck_artifact_junit(
+    name = "nextest_buck_artifact_junit",
 )
 
 sh_binary(
@@ -218,4 +273,30 @@ sh_test(
 sh_test(
     name = "adapter_signal_cleanup",
     test = "adapter_signal_cleanup.sh",
+)
+
+sh_test(
+    name = "nextest_buck_artifact_junit_output",
+    test = "nextest_buck_artifact_junit_output.sh",
+    args = ["$(location :nextest_buck_artifact_junit)"],
+    resources = ["nextest_buck_artifact_junit_output.sh", ":nextest_buck_artifact_junit"],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_junit_lifecycle",
+    test = "nextest_buck_artifact_junit_lifecycle.sh",
+    args = ["$(location :nextest_buck_artifact_junit)"],
+    resources = ["nextest_buck_artifact_junit_lifecycle.sh", ":nextest_buck_artifact_junit"],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_junit_toolchain",
+    test = "nextest_buck_artifact_junit_toolchain.sh",
+    args = ["$(location :nextest_buck_artifact_junit)"],
+    resources = ["nextest_buck_artifact_junit_toolchain.sh", ":nextest_buck_artifact_junit", "nextest.bzl"],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_junit_signal",
+    test = "nextest_buck_artifact_junit_signal.sh",
 )

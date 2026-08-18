@@ -18,6 +18,10 @@ grep -F 'no-tests' "$readme" >/dev/null
 grep -F 'returns `100`' "$readme" >/dev/null
 grep -F 'Process interruption, abort, and cancellation have no stable adapter classification' "$readme" >/dev/null
 grep -F 'observation/regeneration inputs only' "$readme" >/dev/null
+grep -F 'nextest_buck_artifact_junit' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'local-only' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'buck clean' "$readme" "$baseline" >/dev/null
+grep -F 'caller-owned' "$baseline" >/dev/null
 
 grep -Fi 'experimental' "$baseline" >/dev/null
 grep -Fi 'pre-release' "$baseline" >/dev/null

@@ -8,7 +8,9 @@ if [ "${1:-}" = nextest ]; then
             exec "${BUCK2_NEXTEST_REAL_CARGO:?}" "$@"
             ;;
     esac
-    printf 'top-level cargo nextest dispatch: %s\n' "$*" >>"${BUCK2_NEXTEST_DISPATCH_LOG:?}"
+    if [ -n "${BUCK2_NEXTEST_DISPATCH_LOG:-}" ]; then
+        printf 'top-level cargo nextest dispatch: %s\n' "$*" >>"$BUCK2_NEXTEST_DISPATCH_LOG"
+    fi
     if [ -n "${BUCK2_NEXTEST_LIST_FAULT_STATUS:-}" ] && [ "${2:-}" = list ]; then
         exit "$BUCK2_NEXTEST_LIST_FAULT_STATUS"
     fi

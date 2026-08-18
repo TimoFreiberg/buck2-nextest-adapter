@@ -9,7 +9,7 @@ This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds 
 - `cargo-nextest` 0.9.143, exposing metadata/remap, filterset, output, profile, and no-tests controls used here.
 - Python 3.11+ for strict manifest, metadata, XML-test, baseline tooling, and timeout profile assertions.
 
-No toolchain provisioning is included. `setsid` is needed only for process-group signal-cleanup coverage. The current macOS host does not provide it, so that test reports the prerequisite blocker rather than claiming unsupported coverage.
+No toolchain provisioning is included; this first declared-output rule uses the checked-in local tool-path configuration and is not portable or hermetic. `setsid` is needed only for process-group signal-cleanup coverage. The current macOS host does not provide it, so that test reports the prerequisite blocker rather than claiming unsupported coverage.
 
 ## Canonical invocation
 
@@ -47,6 +47,16 @@ Completed pass and test-failure runs require a valid exported report. Other setu
 A completed timeout, if later observed, remains nextest's ordinary test-failure class and JUnit `<failure>`; this milestone defines no timeout-specific XML marker. Process interruption, abort, and cancellation have no stable adapter classification and remain deferred.
 
 ## Build and test
+
+The fixed declared-output build surface runs the successful `pass_case` contract as a keyed, local-only Buck action:
+
+```sh
+buck2 build //:nextest_buck_artifact_junit --show-output
+# buck-out/.../__nextest_buck_artifact_junit__/junit.xml
+buck2 build //:nextest_buck_artifact_junit
+```
+
+The JUnit file is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers. Identical declared inputs may reuse the keyed output; `buck clean` removes it. This milestone does not promise failed-build report retrieval, configurable filters/profiles/retries, remote execution/cache upload, or persistent nextest rerun records. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
 
 ```sh
 buck2 build //:buck2_nextest_rust_test //:buck2_nextest_artifact_manifest

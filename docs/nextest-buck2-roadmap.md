@@ -191,6 +191,10 @@ Keep JUnit and any other declared result artifacts separate from nextest's
 persistent rerun store. Test concurrent runs, cache hits, cleanup, `buck
 clean`, and remote-like execution before promising result persistence.
 
+**Concrete Phase 6 slice:** the fixed `//:nextest_buck_artifact_junit` custom rule now declares and returns a successful JUnit artifact under `buck-out`. Its action key includes the Buck artifact, manifest, validator, baseline metadata, runtime/source-denial resources, fixed profile/filter contract, and declared local Cargo/Python/cargo-nextest `RunInfo` inputs. The action is local-only with remote cache upload disabled; per-run scratch is private and cleaned, while unchanged keys may reuse the output and `buck clean` removes it. The existing `buck2 test` surface remains caller-owned and fresh.
+
+Remaining Phase 6 work is configurable action-keyed profiles/filters/retries/groups, failed-run artifact semantics, persistent-record policy, stronger concurrency/cache/remote-like validation, and hermetic/remote-ready toolchains. Actual remote execution remains Phase 8 work.
+
 **Deliverable:** a documented ownership and lifecycle contract for results,
 persistent rerun records, scratch files, output identity, caching, and remote
 execution, with a Buck rule/provider shape that declares target-associated

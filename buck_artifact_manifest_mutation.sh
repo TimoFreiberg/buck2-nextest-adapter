@@ -7,6 +7,7 @@ validator=$3
 cargo_baseline=$4
 binary_baseline=$5
 tests_baseline=$6
+export BUCK2_NEXTEST_TEST_EXECUTOR=1
 tmp=$(mktemp -d "./.buck2-nextest-test.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 cp "$manifest" "$tmp/manifest.json"

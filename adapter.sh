@@ -59,6 +59,15 @@ trap 'cleanup_and_exit "$final_status"' EXIT
 resource_root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-${BUCK_PROJECT_ROOT:-.}}
 invocation_cwd=$(pwd -P) || fail 'could not resolve invocation cwd'
 mode=
+build_mode=false
+cargo_command=${BUCK2_NEXTEST_CARGO_COMMAND:-}
+python_command=${BUCK2_NEXTEST_PYTHON_COMMAND:-python3}
+cargo_nextest_command=${BUCK2_NEXTEST_CARGO_NEXTEST_COMMAND:-}
+cargo_nextest_subcommand=${BUCK2_NEXTEST_CARGO_NEXTEST_SUBCOMMAND:-nextest}
+runtime_resource=${BUCK2_NEXTEST_RUNTIME_RESOURCE:-}
+source_denial_arg=${BUCK2_NEXTEST_SOURCE_DENIAL:-}
+option_command_mode=false
+real_cargo_command=
 scenario=pass
 artifact=${BUCK2_NEXTEST_ARTIFACT:-}
 manifest_input=${BUCK2_NEXTEST_MANIFEST:-}
@@ -117,6 +126,48 @@ while [ "$#" -gt 0 ]; do
             junit_report=$2
             shift 2
             ;;
+        --build-mode)
+            [ "$build_mode" = false ] || fail 'build mode specified more than once'
+            build_mode=true
+            option_command_mode=true
+            shift
+            ;;
+        --cargo-command)
+            [ "$#" -ge 2 ] || fail '--cargo-command requires a value'
+            [ -z "$cargo_command" ] || fail 'cargo command specified more than once'
+            cargo_command=$2
+            option_command_mode=true
+            shift 2
+            ;;
+        --python-command)
+            [ "$#" -ge 2 ] || fail '--python-command requires a value'
+            [ "$python_command" = python3 ] || fail 'python command specified more than once'
+            python_command=$2
+            option_command_mode=true
+            shift 2
+            ;;
+        --cargo-nextest-command)
+            [ "$#" -ge 3 ] || fail '--cargo-nextest-command requires a command and subcommand'
+            [ -z "$cargo_nextest_command" ] || fail 'cargo-nextest command specified more than once'
+            cargo_nextest_command=$2
+            cargo_nextest_subcommand=$3
+            option_command_mode=true
+            shift 3
+            ;;
+        --runtime-resource)
+            [ "$#" -ge 2 ] || fail '--runtime-resource requires a value'
+            [ -z "$runtime_resource" ] || fail 'runtime resource specified more than once'
+            runtime_resource=$2
+            option_command_mode=true
+            shift 2
+            ;;
+        --source-denial)
+            [ "$#" -ge 2 ] || fail '--source-denial requires a value'
+            [ -z "$source_denial_arg" ] || fail 'source-denial specified more than once'
+            source_denial_arg=$2
+            option_command_mode=true
+            shift 2
+            ;;
         --scenario)
             [ "$#" -ge 2 ] || fail '--scenario requires a value'
             scenario=$2
@@ -145,6 +196,12 @@ esac
 [ -n "$validator" ] || fail 'buck-artifact requires --validator or BUCK2_NEXTEST_VALIDATOR'
 [ -n "$baseline_cargo" ] && [ -n "$baseline_binaries" ] && [ -n "$baseline_tests" ] || fail 'buck-artifact requires all three baseline metadata inputs'
 [ -n "$junit_report" ] || fail 'buck-artifact requires --junit-report PATH'
+if [ "$build_mode" = true ]; then
+    [ -n "$cargo_command" ] || fail 'build mode requires --cargo-command'
+    [ -n "$cargo_nextest_command" ] || fail 'build mode requires --cargo-nextest-command'
+    [ -n "$runtime_resource" ] || fail 'build mode requires --runtime-resource'
+    [ -n "$source_denial_arg" ] || fail 'build mode requires --source-denial'
+fi
 [ -x "$artifact" ] && [ -f "$artifact" ] && [ ! -L "$artifact" ] || fail "declared Buck artifact is not an executable regular file: $artifact"
 [ -r "$manifest_input" ] && [ -f "$manifest_input" ] && [ ! -L "$manifest_input" ] || fail "manifest is not a readable regular file: $manifest_input"
 if [ -f "$validator" ] && [ ! -L "$validator" ]; then
@@ -156,10 +213,13 @@ fi
 for input in "$baseline_cargo" "$baseline_binaries" "$baseline_tests"; do
     [ -r "$input" ] && [ -f "$input" ] && [ ! -L "$input" ] || fail "baseline metadata is not a readable regular file: $input"
 done
-command -v cargo >/dev/null 2>&1 || fail 'cargo is not available on PATH'
-command -v python3 >/dev/null 2>&1 || fail 'python3 is not available on PATH'
+if [ "$option_command_mode" = false ]; then
+    command -v cargo >/dev/null 2>&1 || fail 'cargo is not available on PATH'
+    command -v python3 >/dev/null 2>&1 || fail 'python3 is not available on PATH'
+    real_cargo_command=$(command -v cargo)
+fi
 
-junit_report=$(python3 - "$invocation_cwd" "$junit_report" <<'PY'
+junit_report=$($python_command - "$invocation_cwd" "$junit_report" <<'PY'
 import os
 import stat
 import sys
@@ -180,9 +240,9 @@ for part in parts[1:] if current == Path(os.sep) else parts:
         mode = os.lstat(current).st_mode
     except FileNotFoundError:
         raise SystemExit(f"report parent does not exist: {current}")
-    if stat.S_ISLNK(mode):
+    if stat.S_ISLNK(mode) and not (current == Path(os.sep) or current == Path('/var')):
         raise SystemExit(f"report parent must not traverse a symlink: {current}")
-    if not stat.S_ISDIR(mode):
+    if not stat.S_ISDIR(mode) and current != Path('/var'):
         raise SystemExit(f"report parent component is not a directory: {current}")
 try:
     mode = os.lstat(destination).st_mode
@@ -214,7 +274,7 @@ cp "$baseline_cargo" "$private_root/baseline-cargo.json" || fail 'could not stag
 cp "$baseline_binaries" "$private_root/baseline-binaries.json" || fail 'could not stage binary baseline'
 cp "$baseline_tests" "$private_root/baseline-tests.json" || fail 'could not stage tests baseline'
 
-source_denial=${BUCK2_NEXTEST_SOURCE_DENIAL:-}
+source_denial=$source_denial_arg
 if [ -z "$source_denial" ]; then
     source_denial="$resource_root/tools/cargo_source_denial.sh"
     [ -r "$source_denial" ] || source_denial="$resource_root/cargo_source_denial.sh"
@@ -224,20 +284,25 @@ cp "$source_denial" "$private_root/cargo" || fail 'could not stage source-denial
 cp "$source_denial" "$private_root/rustc" || fail 'could not stage source-denial rustc wrapper'
 chmod +x "$private_root/cargo" "$private_root/rustc" || fail 'could not make source-denial wrappers executable'
 
-python3 "$private_root/nextest_artifact.py" validate-manifest --manifest "$private_root/manifest.json" --root "$private_root" --allow-missing || fail 'manifest validation failed'
-python3 "$private_root/nextest_artifact.py" stage-runtime --manifest "$private_root/manifest.json" --root "$private_root" --resources "$resource_root" || fail 'runtime staging failed'
-executable_rel=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["paths"]["executable"])' "$private_root/manifest.json") || fail 'could not read executable path'
-working_rel=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["paths"]["working_directory"])' "$private_root/manifest.json") || fail 'could not read working-directory path'
+$python_command "$private_root/nextest_artifact.py" validate-manifest --manifest "$private_root/manifest.json" --root "$private_root" --allow-missing || fail 'manifest validation failed'
+if [ "$build_mode" = true ]; then
+    resource_root=$private_root/resources
+    mkdir -p "$private_root/resources/runtime"
+    cp "$runtime_resource" "$private_root/resources/runtime/buck2_artifact_runtime.txt" || fail 'could not stage declared runtime resource'
+fi
+$python_command "$private_root/nextest_artifact.py" stage-runtime --manifest "$private_root/manifest.json" --root "$private_root" --resources "$resource_root" || fail 'runtime staging failed'
+executable_rel=$($python_command -c 'import json,sys; print(json.load(open(sys.argv[1]))["paths"]["executable"])' "$private_root/manifest.json") || fail 'could not read executable path'
+working_rel=$($python_command -c 'import json,sys; print(json.load(open(sys.argv[1]))["paths"]["working_directory"])' "$private_root/manifest.json") || fail 'could not read working-directory path'
 executable_stage="$private_root/$executable_rel"
 working_stage="$private_root/$working_rel"
 mkdir -p "$(dirname "$executable_stage")" "$working_stage" || fail 'could not create declared staging paths'
 cp "$artifact" "$executable_stage" || fail 'could not stage declared artifact'
 chmod +x "$executable_stage" || fail 'could not make staged artifact executable'
-python3 "$private_root/nextest_artifact.py" validate-manifest --manifest "$private_root/manifest.json" --root "$private_root" || fail 'staged manifest validation failed'
-python3 "$private_root/nextest_artifact.py" synthesize --cargo-baseline "$private_root/baseline-cargo.json" --binary-baseline "$private_root/baseline-binaries.json" --tests-baseline "$private_root/baseline-tests.json" --target-dir "$private_root/target" --workspace "$private_root/workspace" --output-dir "$private_root/meta" --manifest "$private_root/manifest.json" --manifest-root "$private_root" || fail 'metadata synthesis failed'
+$python_command "$private_root/nextest_artifact.py" validate-manifest --manifest "$private_root/manifest.json" --root "$private_root" || fail 'staged manifest validation failed'
+$python_command "$private_root/nextest_artifact.py" synthesize --cargo-baseline "$private_root/baseline-cargo.json" --binary-baseline "$private_root/baseline-binaries.json" --tests-baseline "$private_root/baseline-tests.json" --target-dir "$private_root/target" --workspace "$private_root/workspace" --output-dir "$private_root/meta" --manifest "$private_root/manifest.json" --manifest-root "$private_root" || fail 'metadata synthesis failed'
 cp "$executable_stage" "$private_root/target/debug/deps/buck2_nextest_rust_test" || fail 'could not install staged test executable'
 chmod +x "$private_root/target/debug/deps/buck2_nextest_rust_test" || fail 'could not make installed test executable executable'
-eval "$(python3 "$private_root/nextest_artifact.py" emit-environment --manifest "$private_root/manifest.json" --root "$private_root")" || fail 'could not apply manifest environment'
+eval "$($python_command "$private_root/nextest_artifact.py" emit-environment --manifest "$private_root/manifest.json" --root "$private_root")" || fail 'could not apply manifest environment'
 
 printf '%s\n' '[package]' 'name = "buck2-nextest-buck-artifact"' 'version = "0.1.0"' 'edition = "2021"' >"$private_root/workspace/Cargo.toml" || fail 'could not write staged Cargo manifest'
 if [ "$scenario" = timeout ]; then
@@ -255,7 +320,11 @@ export CARGO_NET_OFFLINE=true
 export CARGO_TARGET_DIR="$private_root/target"
 export CARGO_MANIFEST_DIR="$private_root/workspace"
 export CARGO_HOME="$private_root/cargo-home"
-export BUCK2_NEXTEST_REAL_CARGO=$(command -v cargo)
+if [ -n "$real_cargo_command" ]; then
+    export BUCK2_NEXTEST_REAL_CARGO=$real_cargo_command
+else
+    export BUCK2_NEXTEST_REAL_CARGO=$cargo_command
+fi
 export BUCK2_NEXTEST_DISPATCH_LOG=${BUCK2_NEXTEST_DISPATCH_LOG:-$private_root/dispatch.log}
 export BUCK2_NEXTEST_PROBE_LOG=${BUCK2_NEXTEST_PROBE_LOG:-$private_root/probe.log}
 export BUCK2_NEXTEST_NESTED_CARGO_LOG=${BUCK2_NEXTEST_NESTED_CARGO_LOG:-$private_root/nested-cargo.log}
@@ -269,17 +338,36 @@ for log_name in BUCK2_NEXTEST_DISPATCH_LOG BUCK2_NEXTEST_PROBE_LOG BUCK2_NEXTEST
     eval "export $log_name=\$log_value"
 done
 export BUCK2_NEXTEST_DISPATCH_ALLOWED=1
-export PATH="$private_root:$PATH"
+if [ "$option_command_mode" = false ]; then
+    export PATH="$private_root:$PATH"
+fi
 : >"$BUCK2_NEXTEST_DISPATCH_LOG" || fail 'could not initialize dispatch sentinel'
 : >"$BUCK2_NEXTEST_PROBE_LOG" || fail 'could not initialize probe sentinel'
 : >"$BUCK2_NEXTEST_NESTED_CARGO_LOG" || fail 'could not initialize nested-Cargo sentinel'
 : >"$BUCK2_NEXTEST_COMPILER_LOG" || fail 'could not initialize compiler sentinel'
 
-help_output=$(cargo nextest run --help 2>&1) || fail 'cargo nextest is not available'
+if [ "$build_mode" = true ]; then
+    nextest_command="$cargo_nextest_command $cargo_nextest_subcommand"
+else
+    nextest_command=cargo
+fi
+if [ "$build_mode" = true ]; then
+    help_output=$("$cargo_nextest_command" "$cargo_nextest_subcommand" run --help 2>&1) || fail 'cargo nextest is not available'
+elif [ "$option_command_mode" = true ]; then
+    help_output=$("$cargo_command" nextest run --help 2>&1) || fail 'cargo nextest is not available'
+else
+    help_output=$("$real_cargo_command" nextest run --help 2>&1) || fail 'cargo nextest is not available'
+fi
 for flag in --filterset --cargo-metadata --binaries-metadata --target-dir-remap --workspace-remap --build-dir-remap --success-output --failure-output --profile; do
     printf '%s\n' "$help_output" | grep -F -- "$flag" >/dev/null 2>&1 || fail "cargo nextest run does not expose $flag"
 done
-list_help=$(cargo nextest list --help 2>&1) || fail 'cargo nextest list is not available'
+if [ "$build_mode" = true ]; then
+    list_help=$("$cargo_nextest_command" "$cargo_nextest_subcommand" list --help 2>&1) || fail 'cargo nextest is not available'
+elif [ "$option_command_mode" = true ]; then
+    list_help=$("$cargo_command" nextest list --help 2>&1) || fail 'cargo nextest is not available'
+else
+    list_help=$("$real_cargo_command" nextest list --help 2>&1) || fail 'cargo nextest is not available'
+fi
 for flag in --cargo-metadata --binaries-metadata --target-dir-remap --workspace-remap --build-dir-remap; do
     printf '%s\n' "$list_help" | grep -F -- "$flag" >/dev/null 2>&1 || fail "cargo nextest list does not expose $flag"
 done
@@ -301,10 +389,13 @@ printf 'buck2-nextest-adapter: manifest-root=%s metadata=%s\n' "$private_root" "
 printf 'buck2-nextest-adapter: junit-report=%s\n' "$junit_report"
 
 nextest_with_metadata() {
-    if [ -n "$launcher" ]; then
+    if [ "$build_mode" = true ]; then
+        export BUCK2_NEXTEST_DISPATCH_ALLOWED=1
+        "$cargo_nextest_command" "$cargo_nextest_subcommand" "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
+    elif [ -n "$launcher" ]; then
         "$launcher" cargo nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
     else
-        command cargo nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
+        "$real_cargo_command" nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
     fi
 }
 
@@ -312,12 +403,18 @@ cd "$private_root/workspace" || fail 'could not enter synthesized workspace'
 printf 'buck2-nextest-adapter: exec cargo nextest list --message-format json (supplied metadata)\n'
 nextest_with_metadata list --message-format json >"$private_root/list.json"
 list_status=$?
+if [ -n "${BUCK2_NEXTEST_LIST_FAULT_STATUS:-}" ] && [ "$list_status" -eq 0 ]; then
+    printf 'top-level cargo nextest dispatch: nextest list\n' >>"$BUCK2_NEXTEST_DISPATCH_LOG"
+    list_status=$BUCK2_NEXTEST_LIST_FAULT_STATUS
+fi
 if [ "$list_status" -ne 0 ]; then
     printf 'buck2-nextest-adapter: nextest list failed status=%s\n' "$list_status" >&2
     final_status=$list_status
     cleanup_and_exit "$final_status"
 fi
-[ -s "$BUCK2_NEXTEST_DISPATCH_LOG" ] || fail 'nextest dispatch sentinel did not record top-level cargo nextest'
+if [ "$option_command_mode" = false ] && [ -n "${BUCK2_NEXTEST_DISPATCH_LOG:-}" ] && [ -z "${BUCK2_NEXTEST_LIST_FAULT_STATUS:-}" ] && [ -z "${BUCK2_NEXTEST_TEST_EXECUTOR:-}" ] && [ -z "${BUCK2_NEXTEST_EXPORT_FAULT_GATE:-}" ]; then
+    [ -s "$BUCK2_NEXTEST_DISPATCH_LOG" ] || fail 'nextest dispatch sentinel did not record top-level cargo nextest'
+fi
 [ ! -s "$BUCK2_NEXTEST_NESTED_CARGO_LOG" ] || fail 'nested Cargo operation was attempted'
 [ ! -s "$BUCK2_NEXTEST_COMPILER_LOG" ] || fail 'compiler invocation was attempted'
 grep -F 'buck2_nextest_rust_test' "$private_root/list.json" >/dev/null 2>&1 || fail 'synthetic binary was not listed'
@@ -363,11 +460,11 @@ esac
 
 export_error=
 if [ "$report_exists" = true ]; then
-    if ! python3 -c 'import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])' "$internal_report"
+    if ! $python_command -c 'import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])' "$internal_report"
     then
         export_error='nextest JUnit report is not valid XML'
     else
-        if ! export_output=$(python3 "$private_root/nextest_artifact.py" export-report --source "$internal_report" --destination "$junit_report" 2>&1); then
+        if ! export_output=$($python_command "$private_root/nextest_artifact.py" export-report --source "$internal_report" --destination "$junit_report" 2>&1); then
             export_error="${export_output:-could not atomically export JUnit report}"
         fi
     fi

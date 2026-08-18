@@ -54,6 +54,12 @@ For runs, a private `.config/nextest.toml` defines profile `ci` and `junit.path 
 
 Nextest writes JUnit beneath the private workspace. After the child exits, the adapter saves its status, verifies any emitted report as XML, copies the bytes to a mode-0600 same-directory temporary beside the caller destination, and atomically renames it. The report therefore survives private-root cleanup, and the adapter does not rewrite or add XML elements. Byte-digest tests compare a trusted private nextest report with the exported file.
 
+## Declared build output and caller-owned test output
+
+`//:nextest_buck_artifact_junit` is a separate normal Buck build action. It declares one successful `junit.xml` output under `buck-out`, uses the fixed `ci`/`test(=pass_case)` contract, runs locally with declared local Cargo/Python/cargo-nextest `RunInfo` inputs, and may reuse an unchanged action key. `buck clean` removes the output and the action regenerates it. Its private synthesized workspace, metadata, target state, and intermediate report are per-run scratch and are removed on completion; no persistent nextest rerun store is created.
+
+The local executable paths in this first toolchain contract are configured local strings used by the action; they are not portable file inputs and are not a claim of hermetic or remote execution. Failed build report retrieval and configurable profiles, filters, retries, and groups remain deferred. In contrast, `buck2 test` continues to invoke the caller-owned adapter handoff: its JUnit destination is supplied by the test script and is not a declared output of the test target.
+
 ## Status and failure precedence
 
 The bounded process contract is:
