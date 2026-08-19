@@ -12,6 +12,7 @@ roadmap=$root/docs/nextest-buck2-roadmap.md
 grep -F '## Canonical invocation' "$readme" >/dev/null
 grep -F '`buck-artifact` is the only supported adapter mode' "$readme" >/dev/null
 grep -F -- '--junit-report PATH' "$readme" >/dev/null
+for control in profile filter no-tests report-skipped timeout-seconds; do grep -F -- "$control" "$readme" "$baseline" "$roadmap" >/dev/null; done
 grep -F 'copies the nextest bytes unchanged' "$readme" >/dev/null
 grep -F 'Python 3.11+' "$readme" >/dev/null
 grep -F 'no-tests' "$readme" >/dev/null
@@ -36,7 +37,12 @@ grep -F 'raw nextest status=<status>' "$baseline" >/dev/null
 
 grep -F '## Current position' "$roadmap" >/dev/null
 grep -F 'first bounded Phase 5 milestone is complete' "$roadmap" >/dev/null
+grep -F 'five attrs' "$roadmap" >/dev/null
+grep -F 'default-*' "$readme" "$baseline" >/dev/null
+grep -F 'fixed-name `junit.xml`' "$baseline" "$roadmap" >/dev/null
 grep -F 'filtered-out absence' "$roadmap" >/dev/null
+legacy_switch=$(printf '%s%s' -- -scenario)
+! grep -F -- "$legacy_switch" "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'no timeout-specific marker' "$roadmap" >/dev/null
 grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
 grep -F 'Keep the completed JUnit/status boundary stable' "$roadmap" >/dev/null

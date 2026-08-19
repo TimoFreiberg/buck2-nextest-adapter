@@ -24,23 +24,27 @@ adapter.sh buck-artifact \
   --binary-baseline PATH \
   --tests-baseline PATH \
   --junit-report PATH \
-  [--scenario pass|fail|ignored|filtered|no-tests|timeout]
+  [--profile NAME] [--filter EXPRESSION] \
+  [--no-tests auto|pass|warn|fail] \
+  [--report-skipped default|ignored] [--timeout-seconds N]
 ```
 
 Every input and the report destination are validated before any `cargo nextest` help probe or dispatch. A relative report path is resolved against the adapter invocation directory. Existing parent components must be real directories, not symlinks; the destination may be absent or an existing regular file, but may not be a directory or symlink. Parents are not created. Export uses a mode-0600 same-directory temporary and atomic replacement, so the last successful export wins.
 
-The adapter configures a private `ci` nextest profile with `junit.path = "junit.xml"`. For the ignored-only scenario it also sets `report-skipped = "ignored"`; nextest 0.9.143 requires `--no-tests pass` because the selected test is skipped rather than runnable. Other closed scenarios use the default skipped-report policy so filtered-out cases remain absent. The adapter validates XML only to reject a broken internal report; it copies the nextest bytes unchanged and does not add a summary protocol.
+The adapter defaults to a private `ci` profile, `filter = test(=pass_case)`, `no_tests = auto`, `report_skipped = default`, and `timeout_seconds = 0`. These five values are also declared attrs on `nextest_buck_artifact_junit` and are literal action inputs, so changing a result-affecting value changes the Buck action identity. Profiles must match `[A-Za-z0-9][A-Za-z0-9_-]*`; syntactically safe `default-*` names are accepted, but nextest owns that upstream namespace and may assign them special meaning. Filters remain one quoted nextest expression and are never placed in TOML or paths. A positive timeout generates only the bounded `slow-timeout` table; `report_skipped = ignored` adds the corresponding JUnit setting. The fixed declared output remains `junit.xml`, while the generated profile-specific report and all other scratch stay private to each invocation. The adapter validates XML only to reject a broken internal report; it copies the nextest bytes unchanged and does not add a summary protocol.
 
 ## Supported results
 
 The bounded result contract follows nextest's process boundary:
 
-- `pass`: selects `pass_case`, exports successful JUnit, returns `0`.
-- `fail`: selects `fail_case`, exports a `<failure>`, returns `100`.
-- `ignored`: selects `ignored_case`, exports it as `<skipped>`, returns `0`.
-- `filtered`: selects only `pass_case`; `fail_case` and `ignored_case` are absent, returns `0`.
-- `no-tests`: uses an unmatched filter and `--no-tests fail`, returns `4`. If nextest emits no JUnit, the destination may remain absent; XML is never synthesized.
-- `timeout`: development/regression coverage selects `timeout_case` with a closed one-second nextest slow-timeout profile; the completed timeout is ordinary status `100` with a JUnit `<failure>` and no timeout-specific marker. This is not a general timeout configuration API.
+The result combinations exercised by the test suite are:
+
+- pass: `filter = test(=pass_case)`; returns `0`.
+- failure: `filter = test(=fail_case)`; exports a `<failure>`, returns `100`.
+- ignored: `filter = test(=ignored_case)`, `report_skipped = ignored`, `no_tests = pass`; exports `<skipped>`, returns `0`.
+- filtered: `filter = test(=pass_case)`; other cases are absent, returns `0`.
+- no-tests: `filter = test(=does_not_exist)`, `no_tests = fail`; returns `4`.
+- timeout: `filter = test(=timeout_case)`, `timeout_seconds = 1`; nextest reports ordinary status `100` with a JUnit `<failure>`.
 
 Completed pass and test-failure runs require a valid exported report. Other setup/metadata/unknown nonzero statuses retain their raw nextest status and export a report if one exists. A required post-dispatch verification/export failure returns adapter status `3` and prints the raw nextest status; pre-dispatch validation returns `2`. Human-readable nextest output remains diagnostic, not a protocol.
 
@@ -56,7 +60,7 @@ buck2 build //:nextest_buck_artifact_junit --show-output
 buck2 build //:nextest_buck_artifact_junit
 ```
 
-The JUnit file is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers. Identical declared inputs may reuse the keyed output; `buck clean` removes it. This milestone does not promise failed-build report retrieval, configurable filters/profiles/retries, remote execution/cache upload, or persistent nextest rerun records. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
+The JUnit file is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers. Identical declared inputs may reuse the keyed output; `buck clean` removes it. The rule supports only the five bounded controls above, not arbitrary nextest TOML. Retries, groups, failed-build report retrieval, persistent nextest rerun records, remote execution, and cache upload remain non-goals. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
 
 ```sh
 buck2 build //:buck2_nextest_rust_test //:buck2_nextest_artifact_manifest
@@ -71,7 +75,7 @@ buck2 test --test-executor-stdout=- --test-executor-stderr=- //:legacy_path_abse
 buck2 test --test-executor-stdout=- --test-executor-stderr=- //:documentation_smoke
 ```
 
-The pass scenario also proves manifest-driven cwd/environment, runtime staging, source denial/no nested build, executable digest equality, and once-only private-root cleanup. Destination tests prove pre-dispatch rejection, existing-file replacement, paths with spaces, byte-identical pass-through, and status-3 precedence for forced export failures after raw `0` and `100`.
+The pass test also proves manifest-driven cwd/environment, runtime staging, source denial/no nested build, executable digest equality, and once-only private-root cleanup. Destination tests prove pre-dispatch rejection, existing-file replacement, paths with spaces, byte-identical pass-through, and status-3 precedence for forced export failures after raw `0` and `100`.
 
 ## Manifest and baseline distinction
 

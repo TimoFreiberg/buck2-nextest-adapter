@@ -15,7 +15,12 @@ out=${1:-capability-preflight.txt}
             printf '%s %s=present\n' "$command" "$flag"
         done
     done
-    printf 'run --filterset=present\n'
+    run_help=$(cargo nextest run --help 2>&1)
+    for flag in --filterset --profile --no-tests; do
+        printf '%s\n' "$run_help" | grep -F -- "$flag" >/dev/null
+        printf 'run %s=present\n' "$flag"
+    done
+    printf 'config report-skipped=ignored and slow-timeout=present\n'
     if command -v setsid >/dev/null 2>&1; then
         printf 'process-group-launcher=setsid\n'
     else

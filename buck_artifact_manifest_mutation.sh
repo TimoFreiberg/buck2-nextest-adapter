@@ -19,7 +19,7 @@ d['environment']['BUCK2_ARTIFACT_RUNTIME'] = 'mutated'
 json.dump(d, open(p, 'w'))
 PY
 out=$tmp/out
-"$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$tmp/manifest.json" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" --scenario pass >"$out" 2>&1
+"$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$tmp/manifest.json" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" --profile ci --filter 'test(=pass_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$out" 2>&1
 grep -F 'runtime=mutated content=buck2-nextest-artifact-runtime-v1' "$out"
 [ -s "$tmp/report.xml" ]
 cp "$manifest" "$tmp/invalid.json"
@@ -32,7 +32,7 @@ PY
 : >"$tmp/dispatch.log"
 : >"$tmp/probe.log"
 set +e
-BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" BUCK2_NEXTEST_PROBE_LOG="$tmp/probe.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$tmp/invalid.json" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/invalid-report.xml" --scenario pass >"$tmp/invalid.out" 2>&1
+BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" BUCK2_NEXTEST_PROBE_LOG="$tmp/probe.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$tmp/invalid.json" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/invalid-report.xml" --profile ci --filter 'test(=pass_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$tmp/invalid.out" 2>&1
 status=$?
 set -e
 [ "$status" -eq 2 ]

@@ -2,6 +2,8 @@ load("@toolchains//:nextest.bzl", "NextestBuckToolchainInfo")
 
 
 def _nextest_buck_artifact_junit_impl(ctx):
+    if ctx.attrs.timeout_seconds < 0 or ctx.attrs.timeout_seconds > 86400:
+        fail("timeout_seconds must be between 0 and 86400")
     output = ctx.actions.declare_output("junit.xml")
     toolchain = ctx.attrs._nextest_toolchain[NextestBuckToolchainInfo]
 
@@ -21,6 +23,11 @@ def _nextest_buck_artifact_junit_impl(ctx):
         "--python-command", toolchain.python.args,
         "--cargo-nextest-command", toolchain.cargo_nextest.args, "nextest",
         "--junit-report", output.as_output(),
+        "--profile", ctx.attrs.profile,
+        "--filter", ctx.attrs.filter,
+        "--no-tests", ctx.attrs.no_tests,
+        "--report-skipped", ctx.attrs.report_skipped,
+        "--timeout-seconds", str(ctx.attrs.timeout_seconds),
     ])
     ctx.actions.run(
         command,
@@ -42,6 +49,11 @@ nextest_buck_artifact_junit = rule(
         "tests_baseline": attrs.source(default = "//:tests_baseline"),
         "runtime_resource": attrs.source(default = "//:runtime_resource"),
         "source_denial": attrs.source(default = "//:source_denial"),
+        "profile": attrs.string(default = "ci"),
+        "filter": attrs.string(default = "test(=pass_case)"),
+        "no_tests": attrs.enum(["auto", "pass", "warn", "fail"], default = "auto"),
+        "report_skipped": attrs.enum(["default", "ignored"], default = "default"),
+        "timeout_seconds": attrs.int(default = 0),
         "_adapter": attrs.exec_dep(default = "//:nextest_buck_artifact_runner", providers = [RunInfo]),
         "_nextest_toolchain": attrs.default_only(attrs.toolchain_dep(default = "toolchains//:nextest", providers = [NextestBuckToolchainInfo])),
     },

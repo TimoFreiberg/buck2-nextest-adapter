@@ -19,7 +19,7 @@ case "$subcase" in
         ln -s "$tmp/target" "$tmp/destination-symlink"
         for destination in "$tmp/destination-directory" "$tmp/destination-symlink" "$tmp/missing-parent/report.xml"; do
             set +e
-            BUCK2_NEXTEST_PROBE_LOG="$tmp/probe" BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$destination" >"$tmp/out" 2>&1
+            BUCK2_NEXTEST_PROBE_LOG="$tmp/probe" BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$destination" --profile ci --filter 'test(=pass_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$tmp/out" 2>&1
             status=$?
             set -e
             [ "$status" -eq 2 ]
@@ -52,7 +52,7 @@ case "$subcase" in
     list-failure)
         : >"$tmp/dispatch.log"
         set +e
-        BUCK2_NEXTEST_LIST_FAULT_STATUS=42 BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" >"$tmp/out" 2>&1
+        BUCK2_NEXTEST_LIST_FAULT_STATUS=42 BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" --profile ci --filter 'test(=pass_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$tmp/out" 2>&1
         status=$?
         set -e
         [ "$status" -eq 42 ]

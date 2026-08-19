@@ -97,6 +97,12 @@ nextest_buck_artifact_junit(
     name = "nextest_buck_artifact_junit",
 )
 
+nextest_buck_artifact_junit(
+    name = "nextest_buck_artifact_junit_custom",
+    profile = "custom-ci",
+    filter = "test(=pass_case)",
+)
+
 sh_binary(
     name = "nextest_buck_artifact_runner",
     main = "adapter.sh",
@@ -250,6 +256,59 @@ sh_test(
 )
 
 sh_test(
+    name = "nextest_buck_artifact_rule_contract",
+    test = "nextest_buck_artifact_rule_contract.sh",
+    args = ["$(source nextest.bzl)"],
+    resources = ["nextest.bzl", "nextest_buck_artifact_rule_contract.sh"],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_configured",
+    test = "nextest_buck_artifact_configured.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [
+        "nextest_buck_artifact_configured.sh",
+        "nextest_test_recorder.py",
+        "runtime/buck2_artifact_runtime.txt",
+        "tools/cargo_source_denial.sh",
+        ":nextest_buck_artifact_runner",
+    ],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_concurrent",
+    test = "nextest_buck_artifact_concurrent.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [
+        "nextest_buck_artifact_concurrent.sh",
+        "nextest_test_recorder.py",
+        "runtime/buck2_artifact_runtime.txt",
+        "tools/cargo_source_denial.sh",
+        ":nextest_buck_artifact_runner",
+    ],
+)
+
+sh_test(
+    name = "scenario_removed",
+    test = "scenario_removed.sh",
+    resources = ["scenario_removed.sh", "adapter.sh", "README.md", "BUCK"],
+)
+
+sh_test(
     name = "legacy_path_absent",
     test = "legacy_path_absent.sh",
     resources = [
@@ -290,10 +349,23 @@ sh_test(
 )
 
 sh_test(
+    name = "nextest_buck_artifact_junit_outputs",
+    test = "nextest_buck_artifact_junit_outputs.sh",
+    args = ["$(location :nextest_buck_artifact_junit)", "$(location :nextest_buck_artifact_junit_custom)"],
+    resources = ["nextest_buck_artifact_junit_outputs.sh", ":nextest_buck_artifact_junit", ":nextest_buck_artifact_junit_custom"],
+)
+
+sh_test(
     name = "nextest_buck_artifact_junit_toolchain",
     test = "nextest_buck_artifact_junit_toolchain.sh",
     args = ["$(location :nextest_buck_artifact_junit)"],
     resources = ["nextest_buck_artifact_junit_toolchain.sh", ":nextest_buck_artifact_junit", "nextest.bzl"],
+)
+
+sh_test(
+    name = "nextest_capability_preflight",
+    test = "nextest_capability_preflight.sh",
+    resources = ["nextest_capability_preflight.sh"],
 )
 
 sh_test(

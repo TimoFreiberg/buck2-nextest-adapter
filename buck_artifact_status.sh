@@ -46,7 +46,7 @@ PY
             unset BUCK2_NEXTEST_PROFILE_CAPTURE
         fi
         set +e
-        "$python3_bin" - "$timing" "$output" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$destination" --scenario timeout <<'PY'
+        "$python3_bin" - "$timing" "$output" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$destination" --profile ci --filter 'test(=timeout_case)' --no-tests auto --report-skipped default --timeout-seconds 1 <<'PY'
 import os
 import subprocess
 import sys
@@ -113,8 +113,14 @@ PY
     ! grep -F 'adapter-timeout' "$out"
     fi
 if [ "$case_name" != timeout ]; then
+    case "$case_name" in
+        ignored) filter='test(=ignored_case)'; no_tests_value=pass; report_skipped_value=ignored ;;
+        no-tests) filter='test(=does_not_exist)'; no_tests_value=fail; report_skipped_value=default ;;
+        filtered) filter='test(=pass_case)'; no_tests_value=auto; report_skipped_value=default ;;
+        *) printf 'unknown status subcase: %s\n' "$case_name" >&2; exit 2 ;;
+    esac
     set +e
-    "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$report" --scenario "$case_name" >"$out" 2>&1
+    "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$report" --profile ci --filter "$filter" --no-tests "$no_tests_value" --report-skipped "$report_skipped_value" --timeout-seconds 0 >"$out" 2>&1
     status=$?
     set -e
 fi

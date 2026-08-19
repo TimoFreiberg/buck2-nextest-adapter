@@ -14,7 +14,13 @@ out=$tmp/out
 report=${BUCK2_NEXTEST_EXPORT_DESTINATION:-$tmp/exported.xml}
 trusted=$tmp/trusted.xml
 : >"$gate"
-BUCK2_NEXTEST_EXPORT_FAULT_GATE="$gate" BUCK2_NEXTEST_EXPORT_FAULT_MARKER="$marker" "$adapter" "$@" --junit-report "$report" --scenario "$mode" >"$out" 2>&1 &
+case "$mode" in
+    pass) filter='test(=pass_case)'; timeout_seconds=0 ;;
+    fail) filter='test(=fail_case)'; timeout_seconds=0 ;;
+    timeout) filter='test(=timeout_case)'; timeout_seconds=1 ;;
+    *) printf 'invalid mode: %s\n' "$mode" >&2; exit 2 ;;
+esac
+BUCK2_NEXTEST_EXPORT_FAULT_GATE="$gate" BUCK2_NEXTEST_EXPORT_FAULT_MARKER="$marker" "$adapter" "$@" --junit-report "$report" --profile ci --filter "$filter" --no-tests auto --report-skipped default --timeout-seconds "$timeout_seconds" >"$out" 2>&1 &
 pid=$!
 while [ ! -s "$marker" ]; do
     kill -0 "$pid" 2>/dev/null || { wait "$pid" || true; cat "$out"; exit 1; }

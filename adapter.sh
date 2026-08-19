@@ -10,7 +10,7 @@ final_status=2
 pending_signal=
 
 usage() {
-    printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--scenario pass|fail|ignored|filtered|no-tests|timeout]' >&2
+    printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--profile NAME] [--filter EXPRESSION] [--no-tests auto|pass|warn|fail] [--report-skipped default|ignored] [--timeout-seconds N]' >&2
 }
 
 cleanup_and_exit() {
@@ -68,7 +68,16 @@ runtime_resource=${BUCK2_NEXTEST_RUNTIME_RESOURCE:-}
 source_denial_arg=${BUCK2_NEXTEST_SOURCE_DENIAL:-}
 option_command_mode=false
 real_cargo_command=
-scenario=pass
+profile=ci
+filterset='test(=pass_case)'
+no_tests=auto
+report_skipped=default
+timeout_seconds=0
+profile_set=false
+filter_set=false
+no_tests_set=false
+report_skipped_set=false
+timeout_seconds_set=false
 artifact=${BUCK2_NEXTEST_ARTIFACT:-}
 manifest_input=${BUCK2_NEXTEST_MANIFEST:-}
 validator=${BUCK2_NEXTEST_VALIDATOR:-}
@@ -168,9 +177,39 @@ while [ "$#" -gt 0 ]; do
             option_command_mode=true
             shift 2
             ;;
-        --scenario)
-            [ "$#" -ge 2 ] || fail '--scenario requires a value'
-            scenario=$2
+        --profile)
+            [ "$#" -ge 2 ] || fail '--profile requires a value'
+            [ "$profile_set" = false ] || fail 'profile specified more than once'
+            profile=$2
+            profile_set=true
+            shift 2
+            ;;
+        --filter)
+            [ "$#" -ge 2 ] || fail '--filter requires a value'
+            [ "$filter_set" = false ] || fail 'filter specified more than once'
+            filterset=$2
+            filter_set=true
+            shift 2
+            ;;
+        --no-tests)
+            [ "$#" -ge 2 ] || fail '--no-tests requires a value'
+            [ "$no_tests_set" = false ] || fail 'no-tests specified more than once'
+            no_tests=$2
+            no_tests_set=true
+            shift 2
+            ;;
+        --report-skipped)
+            [ "$#" -ge 2 ] || fail '--report-skipped requires a value'
+            [ "$report_skipped_set" = false ] || fail 'report-skipped specified more than once'
+            report_skipped=$2
+            report_skipped_set=true
+            shift 2
+            ;;
+        --timeout-seconds)
+            [ "$#" -ge 2 ] || fail '--timeout-seconds requires a value'
+            [ "$timeout_seconds_set" = false ] || fail 'timeout-seconds specified more than once'
+            timeout_seconds=$2
+            timeout_seconds_set=true
             shift 2
             ;;
         -h|--help)
@@ -182,14 +221,28 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ "$mode" = buck-artifact ] || fail 'the required mode is buck-artifact'
-case "$scenario" in
-    pass|filtered) filterset='test(=pass_case)'; no_tests= ;;
-    fail) filterset='test(=fail_case)'; no_tests= ;;
-    ignored) filterset='test(=ignored_case)'; no_tests='--no-tests pass' ;;
-    timeout) filterset='test(=timeout_case)'; no_tests= ;;
-    no-tests) filterset='test(=does_not_exist)'; no_tests='--no-tests fail' ;;
-    *) fail "invalid scenario: $scenario" ;;
-esac
+config_error=$($python_command - "$profile" "$filterset" "$no_tests" "$report_skipped" "$timeout_seconds" <<'PY'
+import re
+import sys
+
+profile, filterset, no_tests, report_skipped, timeout = sys.argv[1:]
+if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", profile, flags=re.ASCII) is None:
+    print("invalid profile: expected [A-Za-z0-9][A-Za-z0-9_-]*")
+    raise SystemExit(1)
+if not filterset:
+    print("filter must be non-empty")
+    raise SystemExit(1)
+if no_tests not in {"auto", "pass", "warn", "fail"}:
+    print("invalid no-tests value: expected auto|pass|warn|fail")
+    raise SystemExit(1)
+if report_skipped not in {"default", "ignored"}:
+    print("invalid report-skipped value: expected default|ignored")
+    raise SystemExit(1)
+if not re.fullmatch(r"[0-9]+", timeout, flags=re.ASCII) or int(timeout) > 86400:
+    print("invalid timeout-seconds value: expected an integer from 0 through 86400")
+    raise SystemExit(1)
+PY
+) || fail "$config_error"
 
 [ -n "$artifact" ] || fail 'buck-artifact requires --artifact or BUCK2_NEXTEST_ARTIFACT'
 [ -n "$manifest_input" ] || fail 'buck-artifact requires --manifest or BUCK2_NEXTEST_MANIFEST'
@@ -305,13 +358,15 @@ chmod +x "$private_root/target/debug/deps/buck2_nextest_rust_test" || fail 'coul
 eval "$($python_command "$private_root/nextest_artifact.py" emit-environment --manifest "$private_root/manifest.json" --root "$private_root")" || fail 'could not apply manifest environment'
 
 printf '%s\n' '[package]' 'name = "buck2-nextest-buck-artifact"' 'version = "0.1.0"' 'edition = "2021"' >"$private_root/workspace/Cargo.toml" || fail 'could not write staged Cargo manifest'
-if [ "$scenario" = timeout ]; then
-    printf '%s\n' '[profile.ci]' 'slow-timeout = { period = "1s", terminate-after = 1, grace-period = "0s" }' '[profile.ci.junit]' 'path = "junit.xml"' >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest timeout profile'
-elif [ "$scenario" = ignored ]; then
-    printf '%s\n' '[profile.ci.junit]' 'path = "junit.xml"' 'report-skipped = "ignored"' >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest JUnit profile'
-else
-    printf '%s\n' '[profile.ci.junit]' 'path = "junit.xml"' >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest JUnit profile'
-fi
+{
+    if [ "$timeout_seconds" -gt 0 ]; then
+        printf '%s\n' '[profile.'"$profile"']' 'slow-timeout = { period = "'"$timeout_seconds"'s", terminate-after = 1, grace-period = "0s" }'
+    fi
+    printf '%s\n' '[profile.'"$profile"'.junit]' 'path = "junit.xml"'
+    if [ "$report_skipped" = ignored ]; then
+        printf '%s\n' 'report-skipped = "ignored"'
+    fi
+} >"$private_root/workspace/.config/nextest.toml" || fail 'could not write nextest profile'
 if [ -n "${BUCK2_NEXTEST_PROFILE_CAPTURE:-}" ]; then
     cp "$private_root/workspace/.config/nextest.toml" "$BUCK2_NEXTEST_PROFILE_CAPTURE" || fail 'could not capture nextest profile'
 fi
@@ -358,7 +413,7 @@ elif [ "$option_command_mode" = true ]; then
 else
     help_output=$("$real_cargo_command" nextest run --help 2>&1) || fail 'cargo nextest is not available'
 fi
-for flag in --filterset --cargo-metadata --binaries-metadata --target-dir-remap --workspace-remap --build-dir-remap --success-output --failure-output --profile; do
+for flag in --filterset --cargo-metadata --binaries-metadata --target-dir-remap --workspace-remap --build-dir-remap --success-output --failure-output --profile --no-tests; do
     printf '%s\n' "$help_output" | grep -F -- "$flag" >/dev/null 2>&1 || fail "cargo nextest run does not expose $flag"
 done
 if [ "$build_mode" = true ]; then
@@ -382,7 +437,7 @@ digest_file() {
 buck_digest=$(digest_file "$artifact") || fail 'could not digest declared artifact'
 staged_digest=$(digest_file "$executable_stage") || fail 'could not digest staged artifact'
 [ "$buck_digest" = "$staged_digest" ] || fail 'declared and staged artifact digests differ'
-printf 'buck2-nextest-adapter: mode=buck-artifact scenario=%s\n' "$scenario"
+printf 'buck2-nextest-adapter: mode=buck-artifact profile=%s filter=%s no-tests=%s report-skipped=%s timeout-seconds=%s\n' "$profile" "$filterset" "$no_tests" "$report_skipped" "$timeout_seconds"
 printf 'buck2-nextest-adapter: buck-output=%s digest=%s\n' "$artifact" "$buck_digest"
 printf 'buck2-nextest-adapter: staged-executable=%s digest=%s\n' "$executable_stage" "$staged_digest"
 printf 'buck2-nextest-adapter: manifest-root=%s metadata=%s\n' "$private_root" "$private_root/meta"
@@ -423,12 +478,11 @@ grep -F 'fail_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'fail_case
 grep -F 'ignored_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'ignored_case was not listed'
 grep -F 'timeout_case' "$private_root/list.json" >/dev/null 2>&1 || fail 'timeout_case was not listed'
 
-printf 'buck2-nextest-adapter: exec cargo nextest run --profile ci --filterset %s (supplied metadata)\n' "$filterset"
+printf 'buck2-nextest-adapter: exec cargo nextest run --profile %s --filterset %s (supplied metadata)\n' "$profile" "$filterset"
 output_mode=--success-output
-[ "$scenario" = fail ] && output_mode=--failure-output
+[ "$filterset" = 'test(=fail_case)' ] && output_mode=--failure-output
 state=RUNNING
-# shellcheck disable=SC2086
-nextest_with_metadata run --profile ci --message-format human --filterset "$filterset" $no_tests "$output_mode" immediate-final &
+nextest_with_metadata run --profile "$profile" --message-format human --filterset "$filterset" --no-tests "$no_tests" "$output_mode" immediate-final &
 child_pid=$!
 [ -n "$launcher" ] && child_pgid=$child_pid
 wait "$child_pid"
@@ -441,7 +495,7 @@ fi
 child_pid=
 child_pgid=
 state=CHILD_EXITED
-internal_report="$private_root/workspace/target/nextest/ci/junit.xml"
+internal_report="$private_root/workspace/target/nextest/$profile/junit.xml"
 
 if [ -n "${BUCK2_NEXTEST_EXPORT_FAULT_GATE:-}" ] && [ -n "${BUCK2_NEXTEST_EXPORT_FAULT_MARKER:-}" ]; then
     printf '%s\n%s\n' "$internal_report" "$raw_status" >"$BUCK2_NEXTEST_EXPORT_FAULT_MARKER" || true

@@ -13,7 +13,7 @@ trap 'rm -rf "$tmp"' EXIT
 out=$tmp/out
 report=$tmp/failure-report.xml
 set +e
-"$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$report" --scenario fail >"$out" 2>&1
+"$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$report" --profile ci --filter 'test(=fail_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$out" 2>&1
 status=$?
 set -e
 [ "$status" -eq 100 ] || { cat "$out"; printf 'expected status 100, got %s\n' "$status" >&2; exit 1; }

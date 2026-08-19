@@ -19,7 +19,7 @@ PY
 : >"$tmp/dispatch.log"
 : >"$tmp/probe.log"
 set +e
-BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" BUCK2_NEXTEST_PROBE_LOG="$tmp/probe.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$tmp/manifest.json" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" >"$tmp/out" 2>&1
+BUCK2_NEXTEST_DISPATCH_LOG="$tmp/dispatch.log" BUCK2_NEXTEST_PROBE_LOG="$tmp/probe.log" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$tmp/manifest.json" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$tmp/report.xml" --profile ci --filter 'test(=pass_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$tmp/out" 2>&1
 status=$?
 set -e
 [ "$status" -eq 2 ]
