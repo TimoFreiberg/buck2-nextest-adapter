@@ -5,3 +5,5 @@ It's better to add complexity to this codebase in order to reduce complexity in 
 Highest priority is following the buck2 model well so we don't mess anything about the build up.
 Second highest is being a sensible tool for potential users: no weird stuff happening in unexpected parts of the system, only use the buck-out dir if possible, using /tmp/ is fine if necessary. Nothing else.
 Third highest priority is nextest parity. Process-per-test and test slowness / flakiness / timeout handling are important features, if we have to sacrifice others for the higher priorities or e.g. to get remote builds working then that's fine.
+
+Avoid writing tests that pin down implementation details while not helping ensure the quality of the tool, and look for opportunities to remove such tests.
