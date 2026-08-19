@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: _buck-ci nextest_buck_artifact_action_inspection
+ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_junit_failure
 
 # Run the Buck-backed test suite from the repository shell.
 _buck-ci:
@@ -45,6 +45,14 @@ _buck-ci:
 # Run the repository-level action graph inspection without nesting Buck in sh_test.
 nextest_buck_artifact_action_inspection:
     python3 nextest_buck_artifact_action_inspection.py buck2 "$(pwd -P)"
+
+# Verify the declared consumer graph without nesting Buck in sh_test.
+nextest_buck_artifact_consumer_inspection:
+    python3 nextest_buck_artifact_consumer_inspection.py buck2 "$(pwd -P)"
+
+# Verify failed declared-output and consumer semantics from the repository shell.
+nextest_buck_artifact_junit_failure:
+    ./nextest_buck_artifact_junit_failure.sh
 
 # Run one Buck-backed test by its Buck target name, for example `just nextest_buck_artifact_configured`.
 _buck-test name:

@@ -103,6 +103,18 @@ nextest_buck_artifact_junit(
     filter = "test(=pass_case)",
 )
 
+nextest_buck_artifact_junit(
+    name = "nextest_buck_artifact_junit_expected_failure",
+    filter = "test(=fail_case)",
+)
+
+genrule(
+    name = "nextest_buck_artifact_junit_expected_failure_consumer",
+    out = "nextest-buck-artifact-junit-expected-failure-copy.txt",
+    cmd = "cp $(location :nextest_buck_artifact_junit_expected_failure) $OUT",
+    srcs = [":nextest_buck_artifact_junit_expected_failure"],
+)
+
 sh_binary(
     name = "nextest_buck_artifact_runner",
     main = "adapter.sh",
@@ -369,6 +381,7 @@ sh_test(
         "docs/baseline-and-manifest.md",
         "docs/nextest-buck2-roadmap.md",
         "docs/test-coverage-follow-up.md",
+        "nextest_buck_artifact_consumer_inspection.py",
     ],
 )
 

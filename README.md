@@ -46,7 +46,7 @@ The result combinations exercised by the test suite are:
 - no-tests: `filter = test(=does_not_exist)`, `no_tests = fail`; returns `4`.
 - timeout: `filter = test(=timeout_case)`, `timeout_seconds = 1`; nextest reports ordinary status `100` with a JUnit `<failure>`.
 
-Completed pass and test-failure runs require a valid exported report. Other setup/metadata/unknown nonzero statuses retain their raw nextest status and export a report if one exists. A required post-dispatch verification/export failure returns adapter status `3` and prints the raw nextest status; pre-dispatch validation returns `2`. Human-readable nextest output remains diagnostic, not a protocol.
+At the direct adapter layer, completed pass and test-failure runs require a valid caller-owned exported report. Other setup/metadata/unknown nonzero statuses retain their raw nextest status and export a report if one exists. A required post-dispatch verification/export failure returns adapter status `3` and prints the raw nextest status; pre-dispatch validation returns `2`. Human-readable nextest output remains diagnostic, not a protocol.
 
 A completed timeout, if later observed, remains nextest's ordinary test-failure class and JUnit `<failure>`; this milestone defines no timeout-specific XML marker. Process interruption, abort, and cancellation have no stable adapter classification and remain deferred.
 
@@ -60,7 +60,7 @@ buck2 build //:nextest_buck_artifact_junit --show-output
 buck2 build //:nextest_buck_artifact_junit
 ```
 
-The JUnit file is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers. Identical declared inputs may reuse the keyed output; `buck clean` removes it. The rule supports only the five bounded controls above, not arbitrary nextest TOML. Retries, groups, failed-build report retrieval, persistent nextest rerun records, remote execution, and cache upload remain non-goals. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
+The declared `junit.xml` is a successful-build artifact only: it is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers only when the action succeeds. A failing nextest result (status `100`) fails the Buck action; failed declared outputs are not a supported `$(location)` or consumer path. Buck's ordinary failed-action output and logs are the supported build diagnostics. Identical declared inputs may reuse the keyed output; `buck clean` removes it. The rule supports only the five bounded controls above, not arbitrary nextest TOML. Retries, groups, failed-output retrieval, persistent nextest rerun records, remote execution, `error_handler`, and cache upload remain non-goals. The adapter still supports a caller-supplied `--junit-report` destination and propagates the nextest failure status, but this slice does not provide outer `buck2 test` capture, display, or retrieval of that report. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
 
 ```sh
 buck2 build //:buck2_nextest_rust_test //:buck2_nextest_artifact_manifest

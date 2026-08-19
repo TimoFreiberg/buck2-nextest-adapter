@@ -41,6 +41,12 @@ grep -F 'first bounded Phase 5 milestone is complete' "$roadmap" >/dev/null
 grep -F 'five attrs' "$roadmap" >/dev/null
 grep -F 'default-*' "$readme" "$baseline" >/dev/null
 grep -F 'fixed-name `junit.xml`' "$baseline" "$roadmap" >/dev/null
+grep -F 'successful-build artifact only' "$readme" "$baseline" >/dev/null
+grep -F 'failed declared outputs are not a supported' "$readme" "$baseline" >/dev/null
+grep -F 'ordinary failed-action diagnostics' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'caller-supplied `--junit-report`' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'outer `buck2 test` capture, display, and retrieval' "$readme" "$roadmap" >/dev/null
+grep -F 'strict failed-run semantics slice is complete' "$roadmap" >/dev/null
 grep -F 'filtered-out absence' "$roadmap" >/dev/null
 legacy_switch=$(printf '%s%s' -- -scenario)
 ! grep -F -- "$legacy_switch" "$readme" "$baseline" "$roadmap" >/dev/null
@@ -60,5 +66,6 @@ grep -F 'hermetic or alternate toolchain support' "$follow_up" >/dev/null
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"
 ! grep -F 'JUnit XML is a deferred reporting surface' "$readme" "$baseline" "$roadmap"
+! grep -F 'failed-output retrieval is supported' "$readme" "$baseline" "$roadmap"
 ! grep -F 'Start Phase 5 with a bounded reporting' "$roadmap"
 printf '%s\n' 'documentation smoke: passed'
