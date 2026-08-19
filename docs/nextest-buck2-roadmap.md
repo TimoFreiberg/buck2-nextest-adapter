@@ -19,6 +19,11 @@ fixture remains baseline observation/regeneration input only. Phase 4 staging,
 rooted paths, runtime/cwd/environment, source denial, digest equality, synthetic
 metadata, and once-only cleanup remain covered.
 
+The additive test-coverage follow-up is tracked in
+[`docs/test-coverage-follow-up.md`](test-coverage-follow-up.md). It preserves the
+existing suite and adds observable checks for dispatch, configuration, validation,
+report-export safety, and Buck toolchain behavior.
+
 The first bounded Phase 5 milestone is complete: caller-selected JUnit pass-through
 and nextest process statuses are covered for pass (`0`), test failure (`100`),
 ignored/skipped success, filtered-out absence, and explicit no-tests (`4`). A
@@ -248,9 +253,11 @@ not on the initial Cargo fixture.
 
 ## Recommended immediate next step
 
-Keep the completed JUnit/status boundary stable. The deterministic completed-timeout
-fixture is the bounded follow-up now complete; revisit interruption/abort/cancel
-mapping only when a supported nextest machine-readable contract or a
-process-group-capable test environment is available. Keep retries, groups, output
-and run-state ownership, remote execution, direct embedding, and richer event
-protocols as later phases.
+Keep the completed JUnit/status boundary stable. Complete the additive checks in
+[`docs/test-coverage-follow-up.md`](test-coverage-follow-up.md), beginning with
+successful dispatch, `no-tests = auto`, and timeout-disabled profile coverage.
+The deterministic completed-timeout fixture is the bounded follow-up now complete;
+revisit interruption/abort/cancel mapping only when a supported nextest
+machine-readable contract or a process-group-capable test environment is available.
+Keep retries, groups, output and run-state ownership, remote execution, direct
+embedding, and richer event protocols as later phases.
