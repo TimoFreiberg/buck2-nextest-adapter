@@ -2,6 +2,12 @@
 set -eu
 resource_root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-.}
 adapter=$resource_root/adapter.sh
+artifact=${1:-}
+manifest=${2:-}
+validator=${3:-}
+cargo_baseline=${4:-}
+binary_baseline=${5:-}
+tests_baseline=${6:-}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 run_invalid() {
@@ -29,6 +35,26 @@ run_invalid invalid-timeout buck-artifact --timeout-seconds -1
 run_invalid too-large-timeout buck-artifact --timeout-seconds 86401
 run_invalid leading-underscore buck-artifact --profile _bad
 run_invalid leading-dash buck-artifact --profile -bad
+run_build_invalid() {
+    name=$1
+    missing=$2
+    shift 2
+    : >"$tmp/$name.probe"
+    : >"$tmp/$name.dispatch"
+    set +e
+    env -u BUCK2_NEXTEST_CARGO_COMMAND -u BUCK2_NEXTEST_CARGO_NEXTEST_COMMAND -u BUCK2_NEXTEST_RUNTIME_RESOURCE -u BUCK2_NEXTEST_SOURCE_DENIAL \
+        BUCK2_NEXTEST_PROBE_LOG="$tmp/$name.probe" BUCK2_NEXTEST_DISPATCH_LOG="$tmp/$name.dispatch" \
+        "$adapter" "$@" >"$tmp/$name.out" 2>&1
+    status=$?
+    set -e
+    [ "$status" -eq 2 ] || { echo "subcase $name status=$status" >&2; cat "$tmp/$name.out" >&2; exit 1; }
+    grep -F "build mode requires --$missing" "$tmp/$name.out" || { echo "subcase $name diagnostic mismatch" >&2; cat "$tmp/$name.out" >&2; exit 1; }
+    [ ! -s "$tmp/$name.probe" ] && [ ! -s "$tmp/$name.dispatch" ]
+}
+run_build_invalid missing-cargo-command cargo-command buck-artifact '--build-mode' --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --runtime-resource "$resource_root/runtime/buck2_artifact_runtime.txt" --source-denial "$resource_root/tools/cargo_source_denial.sh" --cargo-nextest-command "$resource_root/nextest_test_recorder.py" nextest --junit-report "$tmp/build-report.xml"
+run_build_invalid missing-cargo-nextest-command cargo-nextest-command buck-artifact '--build-mode' --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --runtime-resource "$resource_root/runtime/buck2_artifact_runtime.txt" --source-denial "$resource_root/tools/cargo_source_denial.sh" --cargo-command "$resource_root/tools/cargo_source_denial.sh" --junit-report "$tmp/build-report.xml"
+run_build_invalid missing-runtime-resource runtime-resource buck-artifact '--build-mode' --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --source-denial "$resource_root/tools/cargo_source_denial.sh" --cargo-command "$resource_root/tools/cargo_source_denial.sh" --cargo-nextest-command "$resource_root/nextest_test_recorder.py" nextest --junit-report "$tmp/build-report.xml"
+run_build_invalid missing-source-denial source-denial buck-artifact '--build-mode' --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --runtime-resource "$resource_root/runtime/buck2_artifact_runtime.txt" --cargo-command "$resource_root/tools/cargo_source_denial.sh" --cargo-nextest-command "$resource_root/nextest_test_recorder.py" nextest --junit-report "$tmp/build-report.xml"
 run_invalid slash-profile buck-artifact --profile bad/name
 run_invalid backslash-profile buck-artifact --profile 'bad\\name'
 run_invalid dot-profile buck-artifact --profile bad.name

@@ -49,6 +49,22 @@ case "$subcase" in
         raw=$(BUCK2_NEXTEST_EXPORT_FAULT_ACTION=capture "$root/buck_artifact_export_fault.sh" timeout "$root/adapter.sh" "$tmp/timeout-fault" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline")
         [ "$raw" -eq 100 ]
         ;;
+    permission)
+        set +e
+        BUCK2_NEXTEST_EXPORT_DESTINATION="$tmp/permission/report.xml" "$root/buck_artifact_export_fault.sh" permission "$root/adapter.sh" "$tmp/permission" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" >"$tmp/permission-result" 2>"$tmp/permission-helper.err"
+        permission_status=$?
+        raw=$(cat "$tmp/permission-result")
+        set -e
+        [ "$permission_status" -eq 0 ] || { cat "$tmp/permission-helper.err" 2>/dev/null || true; cat "$tmp/permission-result" 2>/dev/null || true; exit 1; }
+        [ "$raw" -eq 0 ]
+        [ -s "$tmp/permission/report.xml" ]
+        normal_dir=$tmp/normal
+        mkdir "$normal_dir"
+        normal=$normal_dir/report.xml
+        BUCK2_NEXTEST_TEST_EXECUTOR=1 env -u BUCK2_NEXTEST_EXPORT_REPORT_GATE -u BUCK2_NEXTEST_EXPORT_REPORT_READY "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$normal" --profile ci --filter 'test(=pass_case)' --no-tests auto --report-skipped default --timeout-seconds 0 >"$tmp/normal-out" 2>&1
+        [ -s "$normal" ]
+        [ ! -e "$normal_dir/export-gate" ] && [ ! -e "$normal_dir/export-ready" ]
+        ;;
     list-failure)
         : >"$tmp/dispatch.log"
         set +e

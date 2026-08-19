@@ -10,7 +10,7 @@ Make the test suite prove the remaining user-visible execution, configuration, a
 
 ### 1. Cover the successful dispatch path
 
-Add a successful real-nextest scenario that does not set `BUCK2_NEXTEST_TEST_EXECUTOR=1`.
+Add a successful real-nextest scenario that does not set `BUCK2_NEXTEST_TEST_EXECUTOR=1`. **Completed:** `//:nextest_buck_artifact_real_dispatch` records ordered probe and dispatch events, validates the report and cleanup, and confirms source-denial logs remain empty.
 
 Verify that:
 
@@ -23,11 +23,11 @@ Keep the existing test-executor scenarios. They cover the Buck test harness path
 
 ### 2. Cover `no-tests = auto`
 
-Add an unmatched-filter run using `--no-tests auto` and assert the documented nextest status and report behavior. Keep the existing explicit `--no-tests fail` case as a separate check.
+Add an unmatched-filter run using `--no-tests auto` and assert the documented nextest status and report behavior. Keep the existing explicit `--no-tests fail` case as a separate check. **Completed:** `//:nextest_buck_artifact_status_no-tests-auto` asserts raw status `4`, empty/absent report behavior, cleanup, and no adapter marker.
 
 ### 3. Cover the disabled timeout configuration
 
-Add a captured-profile assertion for `--timeout-seconds 0`. Verify that the generated profile does not contain a `slow-timeout` table while still configuring JUnit output. Retain the existing positive timeout test.
+Add a captured-profile assertion for `--timeout-seconds 0`. Verify that the generated profile does not contain a `slow-timeout` table while still configuring JUnit output. Retain the existing positive timeout test. **Completed:** `//:nextest_buck_artifact_status_timeout-disabled` parses TOML semantically while the positive timeout scenario remains unchanged.
 
 ### 4. Cover build-mode argument validation
 
@@ -38,25 +38,25 @@ Extend the adapter CLI validation coverage with build-mode invocations missing e
 - `--runtime-resource`; and
 - `--source-denial`.
 
-Each invocation should fail before nextest probing or dispatch with the documented validation status.
+Each invocation should fail before nextest probing or dispatch with the documented validation status. **Completed:** `//:adapter_mode_validation` covers all four missing build-mode inputs under a sanitized environment.
 
 ### 5. Verify report temporary-file permissions
 
 Add a focused export test that observes the same-directory temporary report while export is blocked and verifies mode `0600`. The test must also verify that the final destination contains the expected bytes after the export completes.
 
-Use the existing export fault gate rather than adding a permanent output or a new protocol.
+Use the existing export fault gate rather than adding a permanent output or a new user-facing protocol; the approved exporter-only synchronization hook is strictly opt-in. **Completed:** `//:nextest_buck_artifact_report_permission` observes the same-directory mode-0600 temporary, verifies byte-identical atomic replacement, and checks the normal export path has no synchronization artifacts.
 
 ### 6. Exercise the process-group prerequisite branch
 
 When the host supports an injectable command lookup or equivalent test seam, cover `BUCK2_NEXTEST_REQUIRE_PROCESS_GROUP=1` with no available `setsid`. Verify pre-dispatch status `2` and absence of probe/dispatch activity.
 
-On hosts where process-group tooling is unavailable, retain the existing prerequisite reporting behavior rather than claiming signal-cleanup coverage.
+On hosts where process-group tooling is unavailable, retain the existing prerequisite reporting behavior rather than claiming signal-cleanup coverage. **Completed:** `//:adapter_process_group_validation` constructs an isolated PATH and reports the explicit `BLOCKED` prerequisite result only when the listed host tools cannot be copied.
 
 ### 7. Strengthen toolchain behavior coverage
 
 Add a Buck-backed check that the configured `RunInfo` toolchain executables are actually passed to the declared action and used for the successful run. Prefer action/runtime observation over source-text matching.
 
-Keep the existing declared-output and action-identity checks.
+Keep the existing declared-output and action-identity checks. **Completed:** action-graph wiring is covered now by exact `aquery` assertions for configured Cargo, Python, and cargo-nextest paths; runtime invocation markers are deferred until hermetic or alternate toolchain support.
 
 ## Acceptance criteria
 

@@ -145,6 +145,20 @@ sh_test(
     resources = [":nextest_buck_artifact_runner", "buck_artifact_expected_failure_assert.sh"],
 )
 
+sh_test(
+    name = "nextest_buck_artifact_real_dispatch",
+    test = "buck_artifact_real_dispatch.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [":nextest_buck_artifact_runner", "buck_artifact_real_dispatch.sh"],
+)
+
 [
     sh_test(
         name = "nextest_buck_artifact_status_{}".format(scenario),
@@ -160,7 +174,7 @@ sh_test(
         ],
         resources = [":nextest_buck_artifact_runner", "buck_artifact_status.sh"],
     )
-    for scenario in ["ignored", "filtered", "no-tests", "timeout"]
+    for scenario in ["ignored", "filtered", "no-tests", "no-tests-auto", "timeout", "timeout-disabled"]
 ]
 
 [
@@ -182,7 +196,7 @@ sh_test(
             "buck_artifact_export_fault.sh",
         ],
     )
-    for subcase in ["pre-dispatch", "success-export-failure", "failure-export-failure", "malformed-report", "list-failure", "timeout-capture"]
+    for subcase in ["pre-dispatch", "success-export-failure", "failure-export-failure", "malformed-report", "list-failure", "timeout-capture", "permission"]
 ]
 
 sh_test(
@@ -252,11 +266,39 @@ sh_test(
 sh_test(
     name = "adapter_mode_validation",
     test = "adapter_mode_validation.sh",
-    resources = ["adapter.sh"],
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [":nextest_buck_artifact_runner", "adapter_mode_validation.sh"],
 )
 
 sh_test(
-    name = "nextest_buck_artifact_rule_contract",
+    name = "adapter_process_group_validation",
+    test = "adapter_process_group_validation.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [
+        ":nextest_buck_artifact_runner",
+        "adapter_process_group_validation.sh",
+        "runtime/buck2_artifact_runtime.txt",
+        "tools/cargo_source_denial.sh",
+        "nextest_test_recorder.py",
+    ],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_rule_contract", 
     test = "nextest_buck_artifact_rule_contract.sh",
     args = ["$(source nextest.bzl)"],
     resources = ["nextest.bzl", "nextest_buck_artifact_rule_contract.sh"],
@@ -326,6 +368,7 @@ sh_test(
         "README.md",
         "docs/baseline-and-manifest.md",
         "docs/nextest-buck2-roadmap.md",
+        "docs/test-coverage-follow-up.md",
     ],
 )
 

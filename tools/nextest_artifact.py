@@ -14,6 +14,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from typing import Any
 
 PACKAGE = "buck2-nextest-buck-artifact"
@@ -472,6 +473,12 @@ def export_report(args: argparse.Namespace) -> None:
             shutil.copyfileobj(input_stream, output_stream)
             output_stream.flush()
             os.fsync(output_stream.fileno())
+        ready_marker = os.environ.get("BUCK2_NEXTEST_EXPORT_REPORT_READY")
+        release_gate = os.environ.get("BUCK2_NEXTEST_EXPORT_REPORT_GATE")
+        if ready_marker and release_gate:
+            Path(ready_marker).write_text(temp_name + "\n", encoding="utf-8")
+            while os.path.exists(release_gate):
+                time.sleep(0.05)
         try:
             existing = os.stat(destination_name, dir_fd=directory_fd, follow_symlinks=False)
         except FileNotFoundError:

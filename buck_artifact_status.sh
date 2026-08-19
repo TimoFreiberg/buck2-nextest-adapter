@@ -15,7 +15,7 @@ tmp=$(cd "$tmp" && pwd -P)
 trap 'rm -rf "$tmp"' EXIT
 report=$tmp/report.xml
 out=$tmp/out
-if [ "$case_name" = timeout ]; then
+if [ "$case_name" = timeout ] || [ "$case_name" = timeout-disabled ]; then
     python3_bin=$(command -v python3 || true)
     if [ -z "$python3_bin" ] || ! "$python3_bin" - <<'PY' >/dev/null 2>&1
 import tomllib
@@ -46,7 +46,13 @@ PY
             unset BUCK2_NEXTEST_PROFILE_CAPTURE
         fi
         set +e
-        "$python3_bin" - "$timing" "$output" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$destination" --profile ci --filter 'test(=timeout_case)' --no-tests auto --report-skipped default --timeout-seconds 1 <<'PY'
+        timeout_value=1
+        timeout_filter='test(=timeout_case)'
+        if [ "$case_name" = timeout-disabled ]; then
+            timeout_value=0
+            timeout_filter='test(=pass_case)'
+        fi
+        "$python3_bin" - "$timing" "$output" "$root/adapter.sh" buck-artifact --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --junit-report "$destination" --profile ci --filter "$timeout_filter" --no-tests auto --report-skipped default --timeout-seconds "$timeout_value" <<'PY'
 import os
 import subprocess
 import sys
@@ -69,6 +75,19 @@ PY
     run_timeout "$marker" "$report" "$out" "$capture" "$tmp/elapsed"
     status=$?
     set -e
+    if [ "$case_name" = timeout-disabled ]; then
+        [ "$status" -eq 0 ] || { cat "$out"; exit 1; }
+        [ -s "$report" ] && [ ! -e "$marker" ]
+        "$python3_bin" - "$capture" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+value = tomllib.loads(Path(sys.argv[1]).read_text())
+assert value["profile"]["ci"]["junit"] == {"path": "junit.xml"}
+assert "slow-timeout" not in value["profile"]["ci"]
+assert "report-skipped" not in value["profile"]["ci"]
+PY
+    else
     [ "$status" -eq 100 ] || { cat "$out"; printf 'expected timeout status 100, got %s\n' "$status" >&2; exit 1; }
     [ -s "$marker" ]
     [ -s "$report" ]
@@ -89,6 +108,7 @@ assert text.index("[profile.ci]") < text.index('slow-timeout = { period = "1s", 
 assert text.index('path = "junit.xml"') > text.index("[profile.ci.junit]")
 assert "report-skipped" not in text
 PY
+    if [ "$case_name" = timeout ]; then
     second_report=$tmp/second-report.xml
     second_marker=$tmp/second-readiness/marker
     mkdir -p "$(dirname "$second_marker")"
@@ -112,10 +132,13 @@ for path in sys.argv[1:]:
 PY
     ! grep -F 'adapter-timeout' "$out"
     fi
-if [ "$case_name" != timeout ]; then
+    fi
+fi
+if [ "$case_name" != timeout ] && [ "$case_name" != timeout-disabled ]; then
     case "$case_name" in
         ignored) filter='test(=ignored_case)'; no_tests_value=pass; report_skipped_value=ignored ;;
         no-tests) filter='test(=does_not_exist)'; no_tests_value=fail; report_skipped_value=default ;;
+        no-tests-auto) filter='test(=does_not_exist)'; no_tests_value=auto; report_skipped_value=default ;;
         filtered) filter='test(=pass_case)'; no_tests_value=auto; report_skipped_value=default ;;
         *) printf 'unknown status subcase: %s\n' "$case_name" >&2; exit 2 ;;
     esac
@@ -125,7 +148,7 @@ if [ "$case_name" != timeout ]; then
     set -e
 fi
 case "$case_name" in
-    timeout)
+    timeout|timeout-disabled)
         ;;
     ignored)
         [ "$status" -eq 0 ] || { cat "$out"; exit 1; }
@@ -151,7 +174,7 @@ assert [c.get('name') for c in cases] == ['pass_case']
 assert [child.tag for child in cases[0] if child.tag in {'failure', 'error', 'skipped'}] == []
 PY
         ;;
-    no-tests)
+    no-tests|no-tests-auto)
         [ "$status" -eq 4 ] || { cat "$out"; printf 'expected status 4, got %s\n' "$status" >&2; exit 1; }
         if [ -e "$report" ]; then
             python3 - "$report" <<'PY'
@@ -161,6 +184,7 @@ root = ET.parse(sys.argv[1]).getroot()
 assert root.findall('.//testcase') == []
 PY
         fi
+        ! grep -F 'adapter-summary' "$out"
         ;;
     *) printf 'unknown status subcase: %s\n' "$case_name" >&2; exit 2 ;;
 esac

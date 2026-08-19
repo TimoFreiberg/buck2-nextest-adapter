@@ -6,6 +6,7 @@ root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-$(dirname "$0")}
 readme=$root/README.md
 baseline=$root/docs/baseline-and-manifest.md
 roadmap=$root/docs/nextest-buck2-roadmap.md
+follow_up=$root/docs/test-coverage-follow-up.md
 [ -f "$root/baseline-and-manifest.md" ] && baseline=$root/baseline-and-manifest.md
 [ -f "$root/nextest-buck2-roadmap.md" ] && roadmap=$root/nextest-buck2-roadmap.md
 
@@ -46,6 +47,15 @@ legacy_switch=$(printf '%s%s' -- -scenario)
 grep -F 'no timeout-specific marker' "$roadmap" >/dev/null
 grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
 grep -F 'Keep the completed JUnit/status boundary stable' "$roadmap" >/dev/null
+grep -F 'successful dispatch path' "$follow_up" >/dev/null
+grep -F 'no-tests = auto' "$follow_up" >/dev/null
+grep -F 'disabled timeout configuration' "$follow_up" >/dev/null
+grep -F 'build-mode argument validation' "$follow_up" >/dev/null
+grep -F 'report temporary-file permissions' "$follow_up" >/dev/null
+grep -F 'process-group prerequisite' "$follow_up" >/dev/null
+grep -F 'action-graph wiring is covered' "$follow_up" >/dev/null
+grep -F 'runtime invocation markers are deferred' "$follow_up" >/dev/null
+grep -F 'hermetic or alternate toolchain support' "$follow_up" >/dev/null
 
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"

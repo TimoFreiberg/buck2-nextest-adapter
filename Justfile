@@ -7,6 +7,7 @@ ci: _buck-ci nextest_buck_artifact_action_inspection
 _buck-ci:
     buck2 test --test-executor-stdout=- --test-executor-stderr=- \
         //:adapter_mode_validation \
+        //:adapter_process_group_validation \
         //:adapter_signal_cleanup \
         //:documentation_smoke \
         //:legacy_path_absent \
@@ -15,6 +16,7 @@ _buck-ci:
         //:nextest_buck_artifact_configured \
         //:nextest_buck_artifact_expected_failure \
         //:nextest_buck_artifact_invalid_manifest \
+        //:nextest_buck_artifact_real_dispatch \
         //:nextest_buck_artifact_junit_lifecycle \
         //:nextest_buck_artifact_junit_output \
         //:nextest_buck_artifact_junit_outputs \
@@ -28,11 +30,14 @@ _buck-ci:
         //:nextest_buck_artifact_report_pre-dispatch \
         //:nextest_buck_artifact_report_success-export-failure \
         //:nextest_buck_artifact_report_timeout-capture \
+        //:nextest_buck_artifact_report_permission \
         //:nextest_buck_artifact_rule_contract \
         //:nextest_buck_artifact_status_filtered \
         //:nextest_buck_artifact_status_ignored \
         //:nextest_buck_artifact_status_no-tests \
+        //:nextest_buck_artifact_status_no-tests-auto \
         //:nextest_buck_artifact_status_timeout \
+        //:nextest_buck_artifact_status_timeout-disabled \
         //:nextest_capability_preflight \
         //:scenario_removed \
         //:validate_artifact_manifest
@@ -47,6 +52,8 @@ _buck-test name:
 
 adapter_mode_validation:
     just _buck-test adapter_mode_validation
+adapter_process_group_validation:
+    just _buck-test adapter_process_group_validation
 adapter_signal_cleanup:
     just _buck-test adapter_signal_cleanup
 documentation_smoke:
@@ -63,6 +70,8 @@ nextest_buck_artifact_expected_failure:
     just _buck-test nextest_buck_artifact_expected_failure
 nextest_buck_artifact_invalid_manifest:
     just _buck-test nextest_buck_artifact_invalid_manifest
+nextest_buck_artifact_real_dispatch:
+    just _buck-test nextest_buck_artifact_real_dispatch
 nextest_buck_artifact_junit_lifecycle:
     just _buck-test nextest_buck_artifact_junit_lifecycle
 nextest_buck_artifact_junit_output:
@@ -89,6 +98,8 @@ nextest_buck_artifact_report_success-export-failure:
     just _buck-test nextest_buck_artifact_report_success-export-failure
 nextest_buck_artifact_report_timeout-capture:
     just _buck-test nextest_buck_artifact_report_timeout-capture
+nextest_buck_artifact_report_permission:
+    just _buck-test nextest_buck_artifact_report_permission
 nextest_buck_artifact_rule_contract:
     just _buck-test nextest_buck_artifact_rule_contract
 nextest_buck_artifact_status_filtered:
@@ -97,8 +108,12 @@ nextest_buck_artifact_status_ignored:
     just _buck-test nextest_buck_artifact_status_ignored
 nextest_buck_artifact_status_no-tests:
     just _buck-test nextest_buck_artifact_status_no-tests
+nextest_buck_artifact_status_no-tests-auto:
+    just _buck-test nextest_buck_artifact_status_no-tests-auto
 nextest_buck_artifact_status_timeout:
     just _buck-test nextest_buck_artifact_status_timeout
+nextest_buck_artifact_status_timeout-disabled:
+    just _buck-test nextest_buck_artifact_status_timeout-disabled
 nextest_capability_preflight:
     just _buck-test nextest_capability_preflight
 scenario_removed:
