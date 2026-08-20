@@ -2,22 +2,26 @@ load(":nextest.bzl", "nextest_system_tool", "nextest_toolchain")
 load("@prelude//toolchains:demo.bzl", "system_demo_toolchains")
 system_demo_toolchains()
 
-# These are explicit local tool inputs for the first declared-output milestone.
-# These checked-in paths are local-only wrappers for this repository checkout.
-# They are intentionally not a claim of portability, hermeticity, or remote readiness.
+# These are deterministic local fixtures for this repository's tests. A consumer
+# supplies its own executable targets exposing DefaultInfo and RunInfo.
 nextest_system_tool(
     name = "nextest-cargo",
-    path = "/Users/timo/.cargo/bin/cargo",
+    executable = "root//:nextest-cargo-executable",
 )
 
 nextest_system_tool(
     name = "nextest-python",
-    path = "/usr/bin/python3",
+    executable = "root//:nextest-python-executable",
 )
 
 nextest_system_tool(
-    name = "nextest-cargo-nextest",
-    path = "/Users/timo/.cargo/bin/cargo",
+    name = "nextest-cargo-nextest-v1",
+    executable = "root//:nextest-cargo-nextest-v1-executable",
+)
+
+nextest_system_tool(
+    name = "nextest-cargo-nextest-v2",
+    executable = "root//:nextest-cargo-nextest-v2-executable",
 )
 
 nextest_toolchain(
@@ -25,5 +29,21 @@ nextest_toolchain(
     visibility = ["PUBLIC"],
     cargo = ":nextest-cargo",
     python = ":nextest-python",
-    cargo_nextest = ":nextest-cargo-nextest",
+    cargo_nextest = ":nextest-cargo-nextest-v1",
+)
+
+nextest_toolchain(
+    name = "nextest-v1",
+    visibility = ["PUBLIC"],
+    cargo = ":nextest-cargo",
+    python = ":nextest-python",
+    cargo_nextest = ":nextest-cargo-nextest-v1",
+)
+
+nextest_toolchain(
+    name = "nextest-v2",
+    visibility = ["PUBLIC"],
+    cargo = ":nextest-cargo",
+    python = ":nextest-python",
+    cargo_nextest = ":nextest-cargo-nextest-v2",
 )

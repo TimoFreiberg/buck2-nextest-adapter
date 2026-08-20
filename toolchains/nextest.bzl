@@ -4,17 +4,22 @@ NextestBuckToolchainInfo = provider(
 
 
 def _nextest_system_tool_impl(ctx):
-    executable = ctx.attrs.path
+    default_outputs = ctx.attrs.executable[DefaultInfo].default_outputs
+    if len(default_outputs) != 1:
+        fail("nextest_system_tool executable must provide exactly one default output")
     return [
-        DefaultInfo(),
-        RunInfo(args = [executable]),
+        DefaultInfo(default_output = default_outputs[0]),
+        RunInfo(args = cmd_args(ctx.attrs.executable[RunInfo].args)),
     ]
 
 
 nextest_system_tool = rule(
     impl = _nextest_system_tool_impl,
     attrs = {
-        "path": attrs.string(doc = "Configured local executable path."),
+        "executable": attrs.exec_dep(
+            providers = [DefaultInfo, RunInfo],
+            doc = "An executable target providing exactly one default output and RunInfo.",
+        ),
     },
 )
 

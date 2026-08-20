@@ -74,6 +74,34 @@ genrule(
 
 load(":nextest.bzl", "nextest_buck_artifact_junit")
 
+sh_binary(
+    name = "nextest-cargo-executable",
+    visibility = ["PUBLIC"],
+    main = "tools/cargo_source_denial.sh",
+    append_script_extension = False,
+)
+
+sh_binary(
+    name = "nextest-python-executable",
+    visibility = ["PUBLIC"],
+    main = "tools/nextest_python_launcher.sh",
+    append_script_extension = False,
+)
+
+sh_binary(
+    name = "nextest-cargo-nextest-v1-executable",
+    visibility = ["PUBLIC"],
+    main = "tools/nextest_cargo_nextest_v1.py",
+    append_script_extension = False,
+)
+
+sh_binary(
+    name = "nextest-cargo-nextest-v2-executable",
+    visibility = ["PUBLIC"],
+    main = "tools/nextest_cargo_nextest_v2.py",
+    append_script_extension = False,
+)
+
 filegroup(
     name = "baseline_summary",
     srcs = ["baseline/normalized/summary.json"],
@@ -104,6 +132,16 @@ nextest_buck_artifact_junit(
 )
 
 nextest_buck_artifact_junit(
+    name = "nextest_buck_artifact_junit_tool_v1",
+    _nextest_toolchain = "toolchains//:nextest-v1",
+)
+
+nextest_buck_artifact_junit(
+    name = "nextest_buck_artifact_junit_tool_v2",
+    _nextest_toolchain = "toolchains//:nextest-v2",
+)
+
+nextest_buck_artifact_junit(
     name = "nextest_buck_artifact_junit_expected_failure",
     filter = "test(=fail_case)",
 )
@@ -125,6 +163,9 @@ sh_binary(
         "runtime/buck2_artifact_runtime.txt",
         "tools/nextest_artifact.py",
         "tools/cargo_source_denial.sh",
+        "tools/nextest_python_launcher.sh",
+        "tools/nextest_cargo_nextest_v1.py",
+        "tools/nextest_cargo_nextest_v2.py",
         ":baseline",
     ],
 )

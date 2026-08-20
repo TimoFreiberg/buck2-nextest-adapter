@@ -24,6 +24,9 @@ grep -F 'nextest_buck_artifact_junit' "$readme" "$baseline" "$roadmap" >/dev/nul
 grep -F 'local-only' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'buck clean' "$readme" "$baseline" >/dev/null
 grep -F 'caller-owned' "$baseline" >/dev/null
+grep -F 'DefaultInfo' "$readme" "$baseline" >/dev/null
+grep -F 'RunInfo' "$readme" "$baseline" >/dev/null
+grep -F 'local convenience' "$readme" "$baseline" >/dev/null
 
 grep -Fi 'experimental' "$baseline" >/dev/null
 grep -Fi 'pre-release' "$baseline" >/dev/null
@@ -45,7 +48,8 @@ grep -F 'successful-build artifact only' "$readme" "$baseline" >/dev/null
 grep -F 'failed declared outputs are not a supported' "$readme" "$baseline" >/dev/null
 grep -F 'ordinary failed-action diagnostics' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'caller-supplied `--junit-report`' "$readme" "$baseline" "$roadmap" >/dev/null
-grep -F 'outer `buck2 test` capture, display, and retrieval' "$readme" "$roadmap" >/dev/null
+grep -F 'outer `buck2 test` capture' "$baseline" >/dev/null
+
 grep -F 'strict failed-run semantics slice is complete' "$roadmap" >/dev/null
 grep -F 'filtered-out absence' "$roadmap" >/dev/null
 legacy_switch=$(printf '%s%s' -- -scenario)
@@ -59,9 +63,9 @@ grep -F 'disabled timeout configuration' "$follow_up" >/dev/null
 grep -F 'build-mode argument validation' "$follow_up" >/dev/null
 grep -F 'report temporary-file permissions' "$follow_up" >/dev/null
 grep -F 'process-group prerequisite' "$follow_up" >/dev/null
-grep -F 'action-graph wiring is covered' "$follow_up" >/dev/null
-grep -F 'runtime invocation markers are deferred' "$follow_up" >/dev/null
-grep -F 'hermetic or alternate toolchain support' "$follow_up" >/dev/null
+grep -F 'action graph wiring' "$follow_up" >/dev/null
+grep -F 'DefaultInfo' "$follow_up" >/dev/null
+grep -F 'restricted-PATH runtime fixture remains a documented follow-up' "$follow_up" >/dev/null
 
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"

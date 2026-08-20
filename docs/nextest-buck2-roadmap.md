@@ -200,7 +200,7 @@ clean`, and remote-like execution before promising result persistence.
 
 The strict failed-run semantics slice is complete: a deliberately failing `//:nextest_buck_artifact_junit_expected_failure` proves that nextest status `100` fails the declared Buck action, and a separate consumer build proves that failed declared `junit.xml` is not a supported `$(location)`/consumer path. The repository-level integration selects the invocation's event log or documented build-report action error, checks adapter private-root cleanup, and avoids asserting failed-output deletion. Buck's ordinary failed-action diagnostics remain the supported build diagnostics.
 
-Remaining Phase 6 work is persistent-record policy, stronger concurrency/cache/remote-like validation, and hermetic/remote-ready toolchains. The installed Buck2 exposes usable repository-level structured target/action queries; the inspections verify all three rule instances, configured toolchain inputs, distinct action commands, and the exact consumer dependency/output graph. Nested invocation from `sh_test` is intentionally deferred because this test environment cannot safely run Buck inside a Buck test. Failed-output retrieval, `error_handler`, retries, groups, arbitrary profile TOML, and actual remote execution remain deferred to later phases. The adapter's caller-supplied `--junit-report` with propagated failure status remains covered separately; outer `buck2 test` capture, display, and retrieval are not promised.
+The Phase 6 portability/action-key slice is complete. Consumers provide Cargo, Python, and cargo-nextest as executable targets exposing `DefaultInfo` and `RunInfo`; cargo-nextest remains a launcher used with the fixed `nextest` subcommand, while Cargo is keyed for source-denial and is not dispatched by build mode. Checked-in v1/v2 fixtures prove selected-tool dispatch and prevent stale cross-variant output reuse. Same-state/fresh-state lifecycle checks and Buck multi-action concurrency checks are included. The restricted-PATH runtime fixture remains an environment-specific follow-up and is not registered in CI because its launcher/argument setup is not yet reliable. The installed Buck2 exposes stable command/owner aquery fields but no documented stable input field used here for an artifact-content assertion, and the cache check reports an execution-observability gap rather than claiming a cache hit. This remains local-only; a remote-ready toolchain still requires distribution/materialization and remote descendant semantics. Nested Buck invocation from `sh_test` remains avoided. Persistent records, failed-output retrieval, `error_handler`, retries, groups, arbitrary profile TOML, and actual remote execution remain deferred.
 
 **Deliverable:** a documented ownership and lifecycle contract for results,
 persistent rerun records, scratch files, output identity, caching, and remote
@@ -255,11 +255,12 @@ not on the initial Cargo fixture.
 
 ## Recommended immediate next step
 
-Keep the completed JUnit/status boundary stable. Complete the additive checks in
-[`docs/test-coverage-follow-up.md`](test-coverage-follow-up.md), beginning with
-successful dispatch, `no-tests = auto`, and timeout-disabled profile coverage.
-The deterministic completed-timeout fixture is the bounded follow-up now complete;
-revisit interruption/abort/cancel mapping only when a supported nextest
-machine-readable contract or a process-group-capable test environment is available.
-Keep retries, groups, output and run-state ownership, remote execution, direct
-embedding, and richer event protocols as later phases.
+Keep the completed JUnit/status boundary stable. The declared-tool portability,
+action-key experiment, lifecycle determinism, and Buck-level concurrency checks are
+the immediate hardening surface. The restricted-PATH runtime fixture remains a
+separate environment-specific follow-up and is not a passing CI check. The cache
+check deliberately reports its execution-observability gap rather than claiming a
+cache hit from identical bytes. The next step is designing tool distribution and
+materialization plus remote descendant semantics before relaxing local-only
+execution. Keep retries, groups, persistent records, direct embedding, and richer
+event protocols as later phases.

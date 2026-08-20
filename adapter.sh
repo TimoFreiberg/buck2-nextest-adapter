@@ -250,6 +250,13 @@ PY
 [ -n "$baseline_cargo" ] && [ -n "$baseline_binaries" ] && [ -n "$baseline_tests" ] || fail 'buck-artifact requires all three baseline metadata inputs'
 [ -n "$junit_report" ] || fail 'buck-artifact requires --junit-report PATH'
 if [ "$build_mode" = true ]; then
+    for variable in cargo_command python_command cargo_nextest_command runtime_resource source_denial_arg; do
+        eval "value=\${$variable}"
+        case "$value" in
+            /*) ;;
+            */*) eval "$variable=\$invocation_cwd/\$value" ;;
+        esac
+    done
     [ -n "$cargo_command" ] || fail 'build mode requires --cargo-command'
     [ -n "$cargo_nextest_command" ] || fail 'build mode requires --cargo-nextest-command'
     [ -n "$runtime_resource" ] || fail 'build mode requires --runtime-resource'

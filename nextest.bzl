@@ -55,6 +55,6 @@ nextest_buck_artifact_junit = rule(
         "report_skipped": attrs.enum(["default", "ignored"], default = "default"),
         "timeout_seconds": attrs.int(default = 0),
         "_adapter": attrs.exec_dep(default = "//:nextest_buck_artifact_runner", providers = [RunInfo]),
-        "_nextest_toolchain": attrs.default_only(attrs.toolchain_dep(default = "toolchains//:nextest", providers = [NextestBuckToolchainInfo])),
+        "_nextest_toolchain": attrs.toolchain_dep(default = "toolchains//:nextest", providers = [NextestBuckToolchainInfo]),
     },
 )

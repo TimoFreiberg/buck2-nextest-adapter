@@ -54,9 +54,14 @@ On hosts where process-group tooling is unavailable, retain the existing prerequ
 
 ### 7. Strengthen toolchain behavior coverage
 
-Add a Buck-backed check that the configured `RunInfo` toolchain executables are actually passed to the declared action and used for the successful run. Prefer action/runtime observation over source-text matching.
+Add a Buck-backed check that the configured declared executable targets are actually passed to the declared action and used for the successful run. Prefer action/runtime observation over source-text matching.
 
-Keep the existing declared-output and action-identity checks. **Completed:** action-graph wiring is covered now by exact `aquery` assertions for configured Cargo, Python, and cargo-nextest paths; runtime invocation markers are deferred until hermetic or alternate toolchain support.
+Keep the existing declared-output and action-identity checks. **Completed:** the `DefaultInfo`/`RunInfo` exec-dependency contract, v1/v2 selected-tool experiment, and action graph wiring are covered. The installed Buck2 does not expose a documented stable aquery input field used for an artifact-content assertion, so the test does not claim one. The restricted-PATH runtime fixture remains a documented follow-up: its current environment-specific launcher/argument setup is not passing reliably and is not registered in CI.
+
+### 8. Action lifecycle and Buck scheduling
+
+**Completed:** repository-level checks cover selected-tool action identity, deterministic same-state/fresh-state rebuilds, scratch/output cleanup, and one Buck invocation scheduling both declared JUnit actions. The cache check reports an execution-observability gap when no stable local reuse signal is available; separate-process concurrency remains environment-gated. Persistent nextest records are not introduced.
+
 
 ## Acceptance criteria
 

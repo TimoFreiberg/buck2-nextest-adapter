@@ -4,9 +4,12 @@ set -eu
 output=${1:?declared JUnit output argument is required}
 [ -f "$output" ]
 [ -z "${BUCK2_NEXTEST_DISPATCH_LOG:-}" ] || exit 1
-toolchain_buck=${BUCK_PROJECT_ROOT:-.}/toolchains/BUCK
-[ -f "$toolchain_buck" ] || toolchain_buck=${BUCK_DEFAULT_RUNTIME_RESOURCES:-.}/toolchains/BUCK
-grep -F "local tool inputs" "$toolchain_buck"
+toolchain_bzl=${BUCK_PROJECT_ROOT:-.}/toolchains/nextest.bzl
+[ -f "$toolchain_bzl" ] || toolchain_bzl=${BUCK_DEFAULT_RUNTIME_RESOURCES:-.}/toolchains/nextest.bzl
+grep -F 'attrs.exec_dep' "$toolchain_bzl"
+grep -F 'providers = [DefaultInfo, RunInfo]' "$toolchain_bzl"
+grep -F 'default_outputs' "$toolchain_bzl"
+grep -F 'RunInfo(args = cmd_args' "$toolchain_bzl"
 python3 - "$output" <<'PY'
 import sys
 import xml.etree.ElementTree as ET

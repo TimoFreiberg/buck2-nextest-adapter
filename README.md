@@ -9,7 +9,7 @@ This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds 
 - `cargo-nextest` 0.9.143, exposing metadata/remap, filterset, output, profile, and no-tests controls used here.
 - Python 3.11+ for strict manifest, metadata, XML-test, baseline tooling, and timeout profile assertions.
 
-No toolchain provisioning is included; this first declared-output rule uses the checked-in local tool-path configuration and is not portable or hermetic. `setsid` is needed only for process-group signal-cleanup coverage. The current macOS host does not provide it, so that test reports the prerequisite blocker rather than claiming unsupported coverage.
+No toolchain provisioning is included. Consumers provide Cargo, Python, and the cargo-nextest launcher as executable Buck targets exposing both `DefaultInfo` and `RunInfo`; the launcher is invoked with the fixed `nextest` subcommand. Cargo is declared and keyed for source-denial, but build mode does not dispatch it to compile or rediscover the artifact. This checkout's checked-in deterministic fixtures are local convenience configuration for tests, not a portable tool distribution or remote-ready toolchain. `setsid` is needed only for process-group signal-cleanup coverage. The current macOS host does not provide it, so that test reports the prerequisite blocker rather than claiming unsupported coverage.
 
 ## Canonical invocation
 
@@ -52,6 +52,19 @@ A completed timeout, if later observed, remains nextest's ordinary test-failure 
 
 ## Build and test
 
+A consumer configures the toolchain with executable targets, for example:
+
+```python
+nextest_toolchain(
+    name = "nextest",
+    cargo = ":cargo-executable",
+    python = ":python-executable",
+    cargo_nextest = ":cargo-nextest-launcher",
+)
+```
+
+Each target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is a launcher target used with the fixed `nextest` subcommand. The repository's fixtures under `tools/` are local convenience targets only.
+
 The fixed declared-output build surface runs the successful `pass_case` contract as a keyed, local-only Buck action:
 
 ```sh
@@ -60,7 +73,7 @@ buck2 build //:nextest_buck_artifact_junit --show-output
 buck2 build //:nextest_buck_artifact_junit
 ```
 
-The declared `junit.xml` is a successful-build artifact only: it is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers only when the action succeeds. A failing nextest result (status `100`) fails the Buck action; failed declared outputs are not a supported `$(location)` or consumer path. Buck's ordinary failed-action output and logs are the supported build diagnostics. Identical declared inputs may reuse the keyed output; `buck clean` removes it. The rule supports only the five bounded controls above, not arbitrary nextest TOML. Retries, groups, failed-output retrieval, persistent nextest rerun records, remote execution, `error_handler`, and cache upload remain non-goals. The adapter still supports a caller-supplied `--junit-report` destination and propagates the nextest failure status, but this slice does not provide outer `buck2 test` capture, display, or retrieval of that report. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
+The declared `junit.xml` is a successful-build artifact only: it is owned by Buck and is available to `$(location :nextest_buck_artifact_junit)` consumers only when the action succeeds. A failing nextest result (status `100`) fails the Buck action; failed declared outputs are not a supported `$(location)` or consumer path. Buck's ordinary failed-action output and logs are the supported build diagnostics. Identical declared inputs produce deterministic byte-identical output in the lifecycle checks. The installed Buck2 does not expose a stable repository contract used here to claim a local cache hit, so the cache check reports that execution-observability gap; `buck clean` policy is likewise not claimed beyond fresh-state rebuild coverage. The rule supports only the five bounded controls above, not arbitrary nextest TOML. Retries, groups, failed-output retrieval, persistent nextest rerun records, remote execution, `error_handler`, and cache upload remain non-goals. The adapter still supports a caller-supplied `--junit-report` destination and propagates the nextest failure status, but this slice does not provide outer `buck2 test` capture, display, or retrieval of that report. Use the existing `buck2 test` surface below for fresh execution and failure/flaky status behavior.
 
 ```sh
 buck2 build //:buck2_nextest_rust_test //:buck2_nextest_artifact_manifest

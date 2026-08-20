@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_junit_failure
+ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_junit_failure nextest_buck_artifact_junit_action_key nextest_buck_artifact_junit_cache nextest_buck_artifact_junit_concurrent_buck
 
 # Run the Buck-backed test suite from the repository shell.
 _buck-ci:
@@ -53,6 +53,12 @@ nextest_buck_artifact_consumer_inspection:
 # Verify failed declared-output and consumer semantics from the repository shell.
 nextest_buck_artifact_junit_failure:
     ./nextest_buck_artifact_junit_failure.sh
+nextest_buck_artifact_junit_action_key:
+    ./nextest_buck_artifact_junit_action_key.sh
+nextest_buck_artifact_junit_cache:
+    ./nextest_buck_artifact_junit_cache.sh
+nextest_buck_artifact_junit_concurrent_buck:
+    ./nextest_buck_artifact_junit_concurrent_buck.sh
 
 # Run one Buck-backed test by its Buck target name, for example `just nextest_buck_artifact_configured`.
 _buck-test name:
