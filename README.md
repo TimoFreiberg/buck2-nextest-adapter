@@ -60,10 +60,13 @@ nextest_toolchain(
     cargo = ":cargo-executable",
     python = ":python-executable",
     cargo_nextest = ":cargo-nextest-launcher",
+    bundle_resources = [":nextest-runtime-resource"],
+    bundle_environment = [["NEXTest_RESOURCE", "relative_path", "runtime/resource.txt"]],
+    bundle_platform = "linux-x86_64-fixture-v1",
 )
 ```
 
-Each target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is a launcher target used with the fixed `nextest` subcommand. A consumer may attach `nextest_bundle_resource` targets to the toolchain. Resource `path` values are relative normalized POSIX paths and resource digests are provider-owned `sha256:<hex>:<size>` values checked before and after staging. Environment entries are ordered `[name, kind, value]` records where `kind` is `literal` or `relative_path`; names are unique and may not replace adapter-owned variables. `bundle_platform` is an opaque execution identity, not the test artifact target triple and not a host `uname` inference. Invalid versions, paths, digests, environment records, or platform identities fail before probing nextest. The repository's fixtures under `tools/` are local convenience targets only; shared libraries and interpreters are not automatically discovered.
+Each target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is a launcher target used with the fixed `nextest` subcommand. A consumer must attach at least one `nextest_bundle_resource` target to the toolchain; every required interpreter, shared library, launcher support file, or other runtime file not already supplied by `RunInfo` must be declared this way. Resource `path` values are relative normalized POSIX paths and resource digests are provider-owned `sha256:<hex>:<size>` values checked before and after staging. Environment entries are ordered `[name, kind, value]` records where `kind` is `literal` or `relative_path`; names are unique and may not replace adapter-owned variables. `bundle_platform` is an opaque execution identity, not the test artifact target triple and not a host `uname` inference. Invalid versions, paths, digests, environment records, or platform identities fail before probing nextest. The repository's fixtures under `tools/` are local convenience targets only; shared libraries and interpreters are not automatically discovered.
 
 The fixed declared-output build surface runs the successful `pass_case` contract as a keyed, local-only Buck action:
 
