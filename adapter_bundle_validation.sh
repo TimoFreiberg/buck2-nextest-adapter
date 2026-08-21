@@ -27,6 +27,19 @@ recorder=$root/nextest_test_recorder.py
 [ -f "$recorder" ] || recorder="$root/../nextest_test_recorder.py"
 recorder=$(cd "$(dirname "$recorder")" && pwd -P)/$(basename "$recorder")
 python_launcher=$(cd "$(dirname "$python_launcher")" && pwd -P)/$(basename "$python_launcher")
+python3 - "$tmp/action-metadata.json" "$root/adapter.sh" "$root/tools/cargo_source_denial.sh" "$python_launcher" "$recorder" "$validator" "$cargo_baseline" "$binary_baseline" "$tests_baseline" "$root/runtime/buck2_artifact_runtime.txt" "$manifest" "$artifact" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+metadata, *paths = sys.argv[1:]
+entries = []
+for path in paths:
+    value = Path(path)
+    data = value.read_bytes()
+    entries.append({"path": str(value), "digest": hashlib.sha256(data).hexdigest() + ":" + str(len(data))})
+Path(metadata).write_text(json.dumps({"version": 1, "digests": entries}), encoding="utf-8")
+PY
 run_invalid() {
     name=$1
     json=$2

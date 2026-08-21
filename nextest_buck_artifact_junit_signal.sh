@@ -33,7 +33,11 @@ out="$run_root/out"
 # The declared-output target is intentionally used only to identify the action; the
 # signal path runs the same adapter boundary with declared fixture inputs below.
 artifact=$artifact_target
-digest=$(shasum -a 256 "$runtime_resource" | awk '{print $1}')
+if command -v sha256sum >/dev/null 2>&1; then
+    digest=$(sha256sum "$runtime_resource" | awk '{print $1}')
+else
+    digest=$(shasum -a 256 "$runtime_resource" | awk '{print $1}')
+fi
 size=$(wc -c <"$runtime_resource" | tr -d ' ')
 bundle_json=$(printf '%s' '{"bundle_environment":[{"kind":"relative_path","name":"BUCK2_BUNDLE_RESOURCE","value":"runtime/fixture-resource.txt"}],"bundle_platform":"signal-fixture-v1","bundle_resources":[{"digest":"sha256:'"$digest"':'"$size"'","path":"runtime/fixture-resource.txt","source":"'"$(basename "$runtime_resource")"'"}],"bundle_version":1}')
 set +e

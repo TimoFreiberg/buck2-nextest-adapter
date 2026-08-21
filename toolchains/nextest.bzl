@@ -30,7 +30,7 @@ def _is_safe_identity(value):
         return False
     for index in range(len(value)):
         char = value[index]
-        if not (char.isalnum() or char in "._-:/"):
+        if not ((char >= "a" and char <= "z") or (char >= "A" and char <= "Z") or (char >= "0" and char <= "9") or char in "._-:/"):
             return False
     return True
 
@@ -205,7 +205,7 @@ nextest_toolchain = rule(
         "cargo": attrs.exec_dep(providers = [RunInfo]),
         "python": attrs.exec_dep(providers = [RunInfo]),
         "cargo_nextest": attrs.exec_dep(providers = [RunInfo]),
-        "bundle_resources": attrs.list(attrs.exec_dep(providers = [NextestBuckBundleResourceInfo]), default = []),
+        "bundle_resources": attrs.list(attrs.exec_dep(providers = [NextestBuckBundleResourceInfo])),
         "bundle_environment": attrs.list(attrs.list(attrs.string()), default = []),
         "bundle_platform": attrs.string(default = "local-fixture-v1"),
     },

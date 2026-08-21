@@ -35,6 +35,8 @@ child_pgid=
 state=PRE_DISPATCH
 final_status=2
 pending_signal=
+newline='
+'
 
 usage() {
     printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--build-mode --cargo-argv ARG... --end-argv --python-argv ARG... --end-argv --cargo-nextest-argv ARG... --end-argv --bundle-json JSON --bundle-resources PATH... --end-bundle-resources --runtime-resource PATH --source-denial PATH --action-metadata-parser PATH] [--profile NAME] [--filter EXPRESSION] [--no-tests auto|pass|warn|fail] [--report-skipped default|ignored] [--timeout-seconds N]' >&2
@@ -235,6 +237,9 @@ while [ "$#" -gt 0 ]; do
             : >"$argv_file" || fail "could not create $argv_kind storage"
             while [ "$#" -gt 0 ] && [ "$1" != --end-argv ]; do
                 [ "$1" != --end-argv ] || fail 'argv delimiter is reserved'
+                case "$1" in
+                    *"$newline"*) fail 'argv elements may not contain newlines' ;;
+                esac
                 printf '%s\n' "$1" >>"$argv_file"
                 shift
             done
@@ -334,6 +339,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ "$mode" = buck-artifact ] || fail 'the required mode is buck-artifact'
+if [ "$build_mode" = true ] && [ -n "$bundle_json" ]; then
+    strict_action_mode=true
+fi
 if [ "$build_mode" = true ]; then
     if [ "$strict_action_mode" = true ]; then
         [ "$cargo_argv_set" = true ] || fail 'build mode requires --cargo-argv'
