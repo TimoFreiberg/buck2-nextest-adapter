@@ -11,7 +11,8 @@ for pair in \
     '"--timeout-seconds", str(ctx.attrs.timeout_seconds)'; do
     grep -F "$pair" "$rule" >/dev/null
 done
-grep -F 'local_only = True' "$rule" >/dev/null
+grep -F 'prefer_local = True' "$rule" >/dev/null
+! grep -F 'local_only = True' "$rule" >/dev/null
 grep -F 'allow_cache_upload = False' "$rule" >/dev/null
 grep -F 'bundle-json' "$rule" >/dev/null
 grep -F 'bundle-resources' "$rule" >/dev/null

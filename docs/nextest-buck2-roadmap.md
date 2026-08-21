@@ -196,11 +196,11 @@ Keep JUnit and any other declared result artifacts separate from nextest's
 persistent rerun store. Test concurrent runs, cache hits, cleanup, `buck
 clean`, and remote-like execution before promising result persistence.
 
-**Concrete Phase 6 slice:** the `//:nextest_buck_artifact_junit` custom rule declares and returns a fixed-name `junit.xml` under `buck-out`. Its five attrs are `profile = ci`, `filter = test(=pass_case)`, `no_tests = auto`, `report_skipped = default`, and `timeout_seconds = 0`; changing any result-affecting attr changes the literal action command inputs and therefore the action identity. Profile names are safe ASCII identifiers, filters are one argv value, and scratch is private and cleaned. The action is local-only with remote cache upload disabled; unchanged keys may reuse the output and `buck clean` removes it. The existing `buck2 test` surface remains caller-owned and fresh.
+**Concrete Phase 6 slice:** the `//:nextest_buck_artifact_junit` custom rule declares and returns a fixed-name `junit.xml` under `buck-out`. Its five attrs are `profile = ci`, `filter = test(=pass_case)`, `no_tests = auto`, `report_skipped = default`, and `timeout_seconds = 0`; changing any result-affecting attr changes the literal action command inputs and therefore the action identity. Profile names are safe ASCII identifiers, filters are one argv value, and scratch is private and cleaned. The action is local-preferred with remote cache upload disabled; ordinary builds retain local behavior, while explicit `--remote-only` can select a caller-configured remote executor. Unchanged keys may reuse the output and `buck clean` removes it. The existing `buck2 test` surface remains caller-owned and fresh.
 
 The strict failed-run semantics slice is complete: a deliberately failing `//:nextest_buck_artifact_junit_expected_failure` proves that nextest status `100` fails the declared Buck action, and a separate consumer build proves that failed declared `junit.xml` is not a supported `$(location)`/consumer path. The repository-level integration selects the invocation's event log or documented build-report action error, checks adapter private-root cleanup, and avoids asserting failed-output deletion. Buck's ordinary failed-action diagnostics remain the supported build diagnostics.
 
-The Phase 6 portability/action-key slice is complete. Consumers provide Cargo, Python, and cargo-nextest as executable targets exposing `DefaultInfo` and `RunInfo`; cargo-nextest remains a launcher used with the fixed `nextest` subcommand, while Cargo is keyed for source-denial and is not dispatched by build mode. The next local-readiness slice adds the versioned provider-owned bundle: every extra runtime file is a direct execution dependency with a normalized destination and checked `sha256:<hex>:<size>` identity, plus typed relative environment metadata and an opaque execution-platform identity. The adapter stages only those resources below its private Buck scratch root and rejects undeclared ambient fallback before nextest probing. Checked-in v1/v2 fixtures expose distinct bundle identities while preserving selected-tool coverage. The relocated/sanitized scenario and descendant process-group cleanup are local readiness checks; cancellation is positive coverage only where `setsid` is available. Materialization-event evidence remains best-effort and does not claim complete input enumeration or cache behavior. Production remains local-only with cache upload disabled; no remote executor, persistent worker, delegation, per-test remote scheduling, credentials, or mandatory remote CI is configured. A future opt-in remote gate must use a supported Buck2 RE backend to independently verify materialization, cancellation/descendant teardown, output retrieval, and cache behavior. Nested Buck invocation from `sh_test` remains avoided. Persistent records, failed-output retrieval, `error_handler`, retries, groups, arbitrary profile TOML, and actual remote execution remain deferred.
+The Phase 6 portability/action-key slice is complete. Consumers provide Cargo, Python, and cargo-nextest as executable targets exposing `DefaultInfo` and `RunInfo`; cargo-nextest remains a launcher used with the fixed `nextest` subcommand, while Cargo is keyed for source-denial and is not dispatched by build mode. The next local-readiness slice adds the versioned provider-owned bundle: every extra runtime file is a direct execution dependency with a normalized destination and checked `sha256:<hex>:<size>` identity, plus typed relative environment metadata and an opaque execution-platform identity. The adapter stages only those resources below its private Buck scratch root and rejects undeclared ambient fallback before nextest probing. Checked-in v1/v2 fixtures expose distinct bundle identities while preserving selected-tool coverage. The relocated/sanitized scenario and descendant process-group cleanup are local readiness checks; cancellation is positive coverage only where `setsid` is available. Materialization-event evidence remains best-effort and does not claim complete input enumeration or cache behavior. The action is local-preferred with cache upload disabled; explicit remote-only selection is available only through caller-supplied RE configuration. The opt-in remote gate preflights the caller-owned external execution platform and fails closed on missing or unstable evidence; its self-test is control-flow coverage only. No persistent worker, delegation, per-test remote scheduling, credentials, repository-owned platform, or mandatory remote CI is configured. Nested Buck invocation from `sh_test` remains avoided. Persistent records, failed-output retrieval, cancellation/descendant teardown, cache behavior, `error_handler`, retries, groups, arbitrary profile TOML, and actual backend validation remain deferred.
 
 **Deliverable:** a documented ownership and lifecycle contract for results,
 persistent rerun records, scratch files, output identity, caching, and remote
@@ -235,8 +235,17 @@ Repeat the artifact/path experiment in a constrained sandbox:
 - Buck2 can observe, cancel, and clean up the adapter's descendants.
 
 **Deliverable:** a remote-like local test that demonstrates the adapter uses only
-Buck2-declared inputs and outputs, followed by actual remote execution if the
-Buck2 environment supports it.
+Buck2-declared inputs and outputs, followed by the opt-in
+`nextest_buck_artifact_remote` gate when a supported Buck2 RE environment is
+supplied. The gate requires `BUCK2_NEXTEST_RE_CONFIG_FILE` and
+`BUCK2_NEXTEST_RE_EXECUTION_PLATFORM_LABEL`, caller-owned external-cell/platform
+configuration, `--remote-only`, `--no-remote-cache`, exact `what-ran` RE evidence,
+and exact `junit.xml` materialization. This proves Buck-side remote-executor observation/submission, not worker-side execution or absence of RE-service deduplication. Missing configuration is
+`blocked-no-backend` with exit 0; configured observability gaps and all other
+configured failures are nonzero. The self-test validates only control flow and
+never substitutes for a backend. Cache validation, cancellation/descendant
+teardown, failed-output retrieval, per-test delegation, and remote CI remain
+deferred.
 
 ### 9. Reassess the long-term integration surface
 
@@ -260,11 +269,14 @@ action-key experiment, lifecycle determinism, and Buck-level concurrency checks 
 the immediate hardening surface. The restricted-PATH runtime fixture remains a
 separate environment-specific follow-up and is not a passing CI check. The cache
 check deliberately reports its execution-observability gap rather than claiming a
-cache hit from identical bytes. The next step is designing a supported remote gate
-around the explicit provider bundle and local descendant semantics before relaxing
-local-only execution. Run `//:nextest_process_group_capability` first; the positive
-signal target is opt-in and must be omitted when `setsid` is unavailable. A supported
-remote backend must independently verify bundle materialization, cancellation and
-descendant teardown, successful and failed output retrieval, and cache behavior.
-Keep retries, groups, persistent records, direct embedding, workers/delegation,
-per-test scheduling, and richer event protocols as later phases.
+cache hit from identical bytes. The local-preferred action policy and the
+fail-closed `nextest_buck_artifact_remote` gate are now the remote-readiness slice:
+run `just nextest_buck_artifact_remote_selftest` for credential-free control-flow
+coverage, and run `just nextest_buck_artifact_remote` only with a supported
+caller-owned backend/platform. Run `//:nextest_process_group_capability` first;
+the positive signal target is opt-in and must be omitted when `setsid` is
+unavailable. A supported remote backend must independently verify bundle
+materialization, cancellation and descendant teardown, successful and failed
+output retrieval, and cache behavior. Keep retries, groups, persistent records,
+direct embedding, workers/delegation, per-test scheduling, and richer event
+protocols as later phases.

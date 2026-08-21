@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_action_metadata_check nextest_buck_artifact_junit_materialization nextest_buck_artifact_junit_failure nextest_buck_artifact_junit_action_key nextest_buck_artifact_junit_cache nextest_buck_artifact_junit_concurrent_buck
+ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_action_metadata_check nextest_buck_artifact_junit_materialization nextest_buck_artifact_junit_local nextest_buck_artifact_junit_failure nextest_buck_artifact_junit_action_key nextest_buck_artifact_junit_cache nextest_buck_artifact_junit_concurrent_buck
 
 # Run the Buck-backed test suite from the repository shell.
 _buck-ci:
@@ -49,6 +49,12 @@ nextest_buck_artifact_action_metadata:
     ./nextest_buck_artifact_action_metadata.sh
 nextest_buck_artifact_junit_materialization:
     ./nextest_buck_artifact_junit_materialization.sh
+nextest_buck_artifact_junit_local:
+    ./nextest_buck_artifact_junit_local.sh
+nextest_buck_artifact_remote:
+    ./nextest_buck_artifact_remote.sh
+nextest_buck_artifact_remote_selftest:
+    ./nextest_buck_artifact_remote_selftest.sh
 
 # Verify the declared consumer graph without nesting Buck in sh_test.
 nextest_buck_artifact_consumer_inspection:

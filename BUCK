@@ -481,6 +481,11 @@ sh_test(
         "docs/nextest-buck2-roadmap.md",
         "docs/test-coverage-follow-up.md",
         "nextest_buck_artifact_consumer_inspection.py",
+        "Justfile",
+        "nextest.bzl",
+        "nextest_buck_artifact_remote.sh",
+        "nextest_buck_artifact_remote_selftest.sh",
+        "nextest_buck_artifact_junit_local.sh",
     ],
 )
 

@@ -84,7 +84,7 @@ for target_key, action in actions.items():
     assert bundle["bundle_resources"] == [{
         "digest": "sha256:5fbd981ca9311519215669ba854c8110d4f58bd015d49827e979280e0500bfe1:34",
         "path": "runtime/fixture-resource.txt",
-        "source": "nextest-bundle-runtime-resource",
+        "source": "nextest-bundle-runtime-resource.txt",
     }], bundle
     assert command[bundle_index + 2] == "--bundle-resources", command
     assert "nextest-bundle-runtime-resource" in command[bundle_index + 3], command

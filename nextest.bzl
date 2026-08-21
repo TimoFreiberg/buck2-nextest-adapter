@@ -47,7 +47,7 @@ def _nextest_buck_artifact_junit_impl(ctx):
     ctx.actions.run(
         command,
         category = "nextest_buck_artifact_junit",
-        local_only = True,
+        prefer_local = True,
         allow_cache_upload = False,
         metadata_env_var = "BUCK2_NEXTEST_ACTION_METADATA",
         metadata_path = "nextest-action-metadata.json",

@@ -21,7 +21,18 @@ grep -F 'returns `100`' "$readme" >/dev/null
 grep -F 'Process interruption, abort, and cancellation have no stable adapter classification' "$readme" >/dev/null
 grep -F 'observation/regeneration inputs only' "$readme" >/dev/null
 grep -F 'nextest_buck_artifact_junit' "$readme" "$baseline" "$roadmap" >/dev/null
-grep -F 'local-only' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'local-preferred' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F -- '--remote-only' "$readme" "$roadmap" >/dev/null
+grep -F 'BUCK2_NEXTEST_RE_CONFIG_FILE' "$readme" "$roadmap" >/dev/null
+grep -F 'BUCK2_NEXTEST_RE_EXECUTION_PLATFORM_LABEL' "$readme" "$roadmap" >/dev/null
+grep -F 'remote gate' "$baseline" >/dev/null
+grep -F 'blocked-no-backend' "$readme" "$roadmap" >/dev/null
+grep -F 'observability-gap' "$readme" "$roadmap" >/dev/null
+grep -F 'allow_cache_upload = False' "$root/nextest.bzl" >/dev/null
+grep -F 'successful output materialization' "$readme" >/dev/null
+grep -F 'worker-side execution' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'nextest_buck_artifact_remote_selftest' "$readme" >/dev/null
+! grep -F 'local-only' "$readme" "$roadmap" >/dev/null
 grep -F 'BUCK_SCRATCH_PATH' "$readme" "$baseline" >/dev/null
 grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'observability gap' "$readme" "$baseline" >/dev/null
@@ -74,5 +85,9 @@ grep -F 'relocated/sanitized declared-input scenario is available as a repositor
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"
 ! grep -F 'JUnit XML is a deferred reporting surface' "$readme" "$baseline" "$roadmap"
 ! grep -F 'failed-output retrieval is supported' "$readme" "$baseline" "$roadmap"
+! grep -F 'remote CI is mandatory' "$readme" "$roadmap"
+! grep -F 'fake RE service' "$readme" "$roadmap"
+! grep -F 'vendor-specific execution platform' "$readme" "$roadmap"
+! grep -F 'endpoint defaults' "$readme" "$roadmap"
 ! grep -F 'Start Phase 5 with a bounded reporting' "$roadmap"
 printf '%s\n' 'documentation smoke: passed'
