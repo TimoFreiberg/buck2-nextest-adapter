@@ -176,8 +176,8 @@ def _nextest_toolchain_impl(ctx):
             fail("bundle environment names must be unique shell names")
         for index in range(len(name)):
             char = name[index]
-            if not (char.isalnum() or char == "_"):
-                fail("bundle environment names must be unique shell names")
+            if not ((char >= "a" and char <= "z") or (char >= "A" and char <= "Z") or (char >= "0" and char <= "9") or char == "_"):
+                fail("bundle environment names must be unique ASCII shell names")
         if kind not in ["literal", "relative_path"] or "\x00" in value:
             fail("bundle environment records have an invalid kind or value")
         if kind == "relative_path" and not _is_safe_relative_path(value):

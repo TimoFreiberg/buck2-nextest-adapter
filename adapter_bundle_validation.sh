@@ -72,6 +72,7 @@ run_invalid bad-digest "${valid/$digest/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 run_invalid bad-platform "${valid/fixture-v1/bad platform}" "$resource"
 run_invalid traversal "${valid/runtime\\/resource.txt/..\\/resource.txt}" "$resource"
 set +e
+    BUCK2_NEXTEST_BUNDLE_ENV_LOG=$tmp/bundle-env.log \
     "$adapter" buck-artifact --build-mode \
     --artifact "$artifact" --manifest "$manifest" --validator "$validator" \
     --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" \
@@ -89,4 +90,10 @@ valid_status=$?
 set -e
 [ "$valid_status" -eq 0 ] || { cat "$tmp/valid.out" >&2; exit 1; }
 grep -F 'cleanup=once' "$tmp/valid.out" >/dev/null
+env_log=$tmp/bundle-env.log
+[ -s "$env_log" ]
+case "$(cat "$env_log")" in
+    */buck2-nextest-buck-artifact.*/bundle/runtime/resource.txt) ;;
+    *) cat "$tmp/valid.out" >&2; exit 1 ;;
+esac
 printf '%s\n' 'adapter bundle validation: passed'

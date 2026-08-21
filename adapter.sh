@@ -666,7 +666,7 @@ for index, item in enumerate(environment):
     if not isinstance(item, dict) or set(item) != {"name", "kind", "value"}:
         raise SystemExit(f"bundle environment {index} has invalid fields")
     name, kind, value = item["name"], item["kind"], item["value"]
-    if not isinstance(name, str) or not name or not (name[0].isalpha() or name[0] == "_") or any(not (c.isalnum() or c == "_") for c in name) or name in seen_names or name in reserved or name.startswith("BUCK2_NEXTEST_"):
+    if not isinstance(name, str) or not name or not (("a" <= name[0] <= "z") or ("A" <= name[0] <= "Z") or name[0] == "_") or any(not (("a" <= c <= "z") or ("A" <= c <= "Z") or ("0" <= c <= "9") or c == "_") for c in name) or name in seen_names or name in reserved or name.startswith("BUCK2_NEXTEST_"):
         raise SystemExit(f"bundle environment name is invalid: {name!r}")
     if kind not in ("literal", "relative_path") or not isinstance(value, str) or "\x00" in value:
         raise SystemExit(f"bundle environment {index} is invalid")
@@ -681,7 +681,7 @@ for index, item in enumerate(environment):
     seen_names.add(name)
 PY
 ) || fail "$bundle_error"
-    . "$bundle_env_file"
+    . "$bundle_env_file" || fail 'could not apply staged bundle environment'
     if [ -n "${BUCK2_NEXTEST_BUNDLE_ENV_LOG:-}" ]; then
         printf '%s\n' "${BUNDLE_FIXTURE_PATH:-}" >"$BUCK2_NEXTEST_BUNDLE_ENV_LOG"
     fi
