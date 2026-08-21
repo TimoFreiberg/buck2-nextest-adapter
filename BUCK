@@ -29,6 +29,13 @@ genrule(
     srcs = ["tools/cargo_source_denial.sh"],
 )
 
+genrule(
+    name = "nextest_buck_artifact_action_metadata",
+    out = "nextest_buck_artifact_action_metadata.py",
+    cmd = "cp tools/nextest_buck_artifact_action_metadata.py $OUT && chmod +x $OUT",
+    srcs = ["tools/nextest_buck_artifact_action_metadata.py"],
+)
+
 filegroup(
     name = "runtime/buck2_artifact_runtime.txt",
     srcs = ["runtime/buck2_artifact_runtime.txt"],
@@ -102,6 +109,13 @@ sh_binary(
     append_script_extension = False,
 )
 
+sh_binary(
+    name = "nextest_buck_artifact_junit_signal_fixture",
+    main = "tools/nextest_buck_artifact_junit_signal_fixture.py",
+    append_script_extension = False,
+    resources = ["tools/nextest_buck_artifact_junit_signal_fixture.py"],
+)
+
 filegroup(
     name = "baseline_summary",
     srcs = ["baseline/normalized/summary.json"],
@@ -166,6 +180,8 @@ sh_binary(
         "tools/nextest_python_launcher.sh",
         "tools/nextest_cargo_nextest_v1.py",
         "tools/nextest_cargo_nextest_v2.py",
+        "tools/nextest_buck_artifact_action_metadata.py",
+        ":nextest_buck_artifact_action_metadata",
         ":baseline",
     ],
 )
@@ -351,6 +367,12 @@ sh_test(
 )
 
 sh_test(
+    name = "nextest_buck_artifact_action_metadata_check",
+    test = "nextest_buck_artifact_action_metadata.sh",
+    resources = ["nextest_buck_artifact_action_metadata.sh"],
+)
+
+sh_test(
     name = "nextest_buck_artifact_rule_contract", 
     test = "nextest_buck_artifact_rule_contract.sh",
     args = ["$(source nextest.bzl)"],
@@ -468,4 +490,18 @@ sh_test(
 sh_test(
     name = "nextest_buck_artifact_junit_signal",
     test = "nextest_buck_artifact_junit_signal.sh",
+    args = [
+        "$(location :nextest_buck_artifact_junit_signal_fixture)",
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+        "$(source runtime/buck2_artifact_runtime.txt)",
+        "$(source tools/cargo_source_denial.sh)",
+        "$(source tools/nextest_buck_artifact_action_metadata.py)",
+        "$(location :nextest-python-executable)",
+    ],
+    resources = ["nextest_buck_artifact_junit_signal.sh", ":nextest_buck_artifact_junit_signal_fixture", "tools/nextest_artifact.py", "tools/cargo_source_denial.sh", "tools/nextest_buck_artifact_action_metadata.py", "runtime/buck2_artifact_runtime.txt", ":baseline", ":buck2_nextest_artifact_manifest"],
 )

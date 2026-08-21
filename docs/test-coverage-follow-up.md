@@ -56,7 +56,7 @@ On hosts where process-group tooling is unavailable, retain the existing prerequ
 
 Add a Buck-backed check that the configured declared executable targets are actually passed to the declared action and used for the successful run. Prefer action/runtime observation over source-text matching.
 
-Keep the existing declared-output and action-identity checks. **Completed:** the `DefaultInfo`/`RunInfo` exec-dependency contract, v1/v2 selected-tool experiment, and action graph wiring are covered. The installed Buck2 does not expose a documented stable aquery input field used for an artifact-content assertion, so the test does not claim one. The restricted-PATH runtime fixture remains a documented follow-up: its current environment-specific launcher/argument setup is not passing reliably and is not registered in CI.
+Keep the existing declared-output and action-identity checks. **Completed:** the `DefaultInfo`/`RunInfo` exec-dependency contract, v1/v2 selected-tool experiment, and action graph wiring are covered. The installed Buck2 does not expose a documented stable aquery input field used for an artifact-content assertion, so the test does not claim one. The relocated/sanitized declared-input scenario is available as a repository-level check; it is not registered as a Buck `sh_test` because this environment's executor does not reliably surface its relocated harness diagnostics. No failing fixture is claimed as CI coverage.
 
 ### 8. Action lifecycle and Buck scheduling
 

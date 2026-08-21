@@ -19,7 +19,7 @@ report=$tmp/report.xml
 filter='test(=pass_case) && name ~ "quoted ; $HOME"'
 set +e
 BUCK2_NEXTEST_ARGV_LOG="$log" BUCK2_NEXTEST_PROFILE_CAPTURE="$capture" \
-    "$root/adapter.sh" buck-artifact --build-mode --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --runtime-resource "$root/runtime/buck2_artifact_runtime.txt" --source-denial "$root/tools/cargo_source_denial.sh" --cargo-command "$root/tools/cargo_source_denial.sh" --python-command python3 --cargo-nextest-command "$recorder" nextest --junit-report "$report" --profile custom-ci --filter "$filter" --no-tests warn --report-skipped ignored --timeout-seconds 7 >"$tmp/out" 2>&1
+    "$root/adapter.sh" buck-artifact --build-mode --artifact "$artifact" --manifest "$manifest" --validator "$validator" --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" --runtime-resource "$root/runtime/buck2_artifact_runtime.txt" --source-denial "$root/tools/cargo_source_denial.sh" --action-metadata-parser "$root/tools/nextest_buck_artifact_action_metadata.py" --cargo-command "$root/tools/cargo_source_denial.sh" --python-command "$root/tools/nextest_python_launcher.sh" --cargo-nextest-command "$recorder" nextest --junit-report "$report" --profile custom-ci --filter "$filter" --no-tests warn --report-skipped ignored --timeout-seconds 7 >"$tmp/out" 2>&1
 status=$?
 set -e
 [ "$status" -eq 0 ] || { cat "$tmp/out" >&2; exit 1; }

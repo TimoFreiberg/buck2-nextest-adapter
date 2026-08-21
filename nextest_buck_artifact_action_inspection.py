@@ -14,6 +14,9 @@ configured = {
     "cargo_nextest_v2": "root//:nextest-cargo-nextest-v2-executable",
 }
 
+assert 'metadata_env_var = "BUCK2_NEXTEST_ACTION_METADATA"' in Path(project, "nextest.bzl").read_text()
+assert 'metadata_path = "nextest-action-metadata.json"' in Path(project, "nextest.bzl").read_text()
+assert "action_metadata_parser" in Path(project, "nextest.bzl").read_text()
 assert "attrs.exec_dep" in Path(project, "toolchains", "nextest.bzl").read_text()
 toolchain_impl = Path(project, "toolchains", "nextest.bzl").read_text()
 assert "providers = [DefaultInfo, RunInfo]" in toolchain_impl
@@ -60,6 +63,7 @@ for target_key, action in actions.items():
         "--cargo-command",
         "--python-command",
         "--cargo-nextest-command",
+        "--action-metadata-parser",
     ):
         assert pair in command, (pair, command)
     assert "--cargo-command" in command, command
@@ -71,6 +75,9 @@ for target_key, action in actions.items():
     else:
         assert "nextest-cargo-nextest-v1" in command[cargo_nextest_index + 1], command
     assert command[cargo_nextest_index + 2] == "nextest", command
+    parser_index = command.index("--action-metadata-parser")
+    assert parser_index + 1 < len(command), command
+    assert "nextest_buck_artifact_action_metadata" in command[parser_index + 1], command
     profile = command[command.index("--profile") + 1]
     filter_value = command[command.index("--filter") + 1]
     assert (profile, filter_value) == expected_targets[target], (target, command)

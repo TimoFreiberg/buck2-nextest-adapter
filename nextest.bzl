@@ -19,6 +19,7 @@ def _nextest_buck_artifact_junit_impl(ctx):
         "--tests-baseline", ctx.attrs.tests_baseline,
         "--runtime-resource", ctx.attrs.runtime_resource,
         "--source-denial", ctx.attrs.source_denial,
+        "--action-metadata-parser", ctx.attrs.action_metadata_parser,
         "--cargo-command", toolchain.cargo.args,
         "--python-command", toolchain.python.args,
         "--cargo-nextest-command", toolchain.cargo_nextest.args, "nextest",
@@ -34,6 +35,8 @@ def _nextest_buck_artifact_junit_impl(ctx):
         category = "nextest_buck_artifact_junit",
         local_only = True,
         allow_cache_upload = False,
+        metadata_env_var = "BUCK2_NEXTEST_ACTION_METADATA",
+        metadata_path = "nextest-action-metadata.json",
     )
     return [DefaultInfo(default_output = output)]
 
@@ -49,6 +52,7 @@ nextest_buck_artifact_junit = rule(
         "tests_baseline": attrs.source(default = "//:tests_baseline"),
         "runtime_resource": attrs.source(default = "//:runtime_resource"),
         "source_denial": attrs.source(default = "//:source_denial"),
+        "action_metadata_parser": attrs.source(default = "//:nextest_buck_artifact_action_metadata"),
         "profile": attrs.string(default = "ci"),
         "filter": attrs.string(default = "test(=pass_case)"),
         "no_tests": attrs.enum(["auto", "pass", "warn", "fail"], default = "auto"),

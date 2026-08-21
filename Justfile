@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_junit_failure nextest_buck_artifact_junit_action_key nextest_buck_artifact_junit_cache nextest_buck_artifact_junit_concurrent_buck
+ci: _buck-ci nextest_buck_artifact_action_inspection nextest_buck_artifact_consumer_inspection nextest_buck_artifact_action_metadata_check nextest_buck_artifact_junit_materialization nextest_buck_artifact_junit_failure nextest_buck_artifact_junit_action_key nextest_buck_artifact_junit_cache nextest_buck_artifact_junit_concurrent_buck
 
 # Run the Buck-backed test suite from the repository shell.
 _buck-ci:
@@ -45,6 +45,10 @@ _buck-ci:
 # Run the repository-level action graph inspection without nesting Buck in sh_test.
 nextest_buck_artifact_action_inspection:
     python3 nextest_buck_artifact_action_inspection.py buck2 "$(pwd -P)"
+nextest_buck_artifact_action_metadata:
+    ./nextest_buck_artifact_action_metadata.sh
+nextest_buck_artifact_junit_materialization:
+    ./nextest_buck_artifact_junit_materialization.sh
 
 # Verify the declared consumer graph without nesting Buck in sh_test.
 nextest_buck_artifact_consumer_inspection:
@@ -64,6 +68,20 @@ nextest_buck_artifact_junit_concurrent_buck:
 _buck-test name:
     buck2 test --test-executor-stdout=- --test-executor-stderr=- "//:{{name}}"
 
+# These portability harnesses remain repository-level checks because this Buck
+# executor does not surface their diagnostics reliably through sh_test.
+adapter_direct_scratch_fallback:
+    root=$(pwd -P) && \
+    artifact=$(buck2 build --show-output //:buck2_nextest_rust_test | tail -1 | cut -d' ' -f2) && \
+    manifest=$(buck2 build --show-output //:buck2_nextest_artifact_manifest | tail -1 | cut -d' ' -f2) && \
+    ./adapter_direct_scratch_fallback.sh "$artifact" "$manifest" "$root/tools/nextest_artifact.py" "$root/baseline/normalized/cargo-metadata.json" "$root/baseline/normalized/binaries.json" "$root/baseline/normalized/tests.json"
+adapter_relocated_sanitized:
+    root=$(pwd -P) && \
+    artifact="$root/$(buck2 build --show-output //:buck2_nextest_rust_test | tail -1 | cut -d' ' -f2)" && \
+    manifest="$root/$(buck2 build --show-output //:buck2_nextest_artifact_manifest | tail -1 | cut -d' ' -f2)" && \
+    python=$(realpath "$root/$(buck2 build --show-output //:nextest-python-executable | tail -1 | cut -d' ' -f2)") && \
+    nextest=$(realpath "$root/$(buck2 build --show-output //:nextest-cargo-nextest-v1-executable | tail -1 | cut -d' ' -f2)") && \
+    ./adapter_relocated_sanitized.sh "$artifact" "$manifest" "$root/tools/nextest_artifact.py" "$root/baseline/normalized/cargo-metadata.json" "$root/baseline/normalized/binaries.json" "$root/baseline/normalized/tests.json" "$python" "$nextest"
 adapter_mode_validation:
     just _buck-test adapter_mode_validation
 adapter_process_group_validation:
@@ -88,6 +106,8 @@ nextest_buck_artifact_real_dispatch:
     just _buck-test nextest_buck_artifact_real_dispatch
 nextest_buck_artifact_junit_lifecycle:
     just _buck-test nextest_buck_artifact_junit_lifecycle
+nextest_buck_artifact_action_metadata_check:
+    just _buck-test nextest_buck_artifact_action_metadata_check
 nextest_buck_artifact_junit_output:
     just _buck-test nextest_buck_artifact_junit_output
 nextest_buck_artifact_junit_outputs:

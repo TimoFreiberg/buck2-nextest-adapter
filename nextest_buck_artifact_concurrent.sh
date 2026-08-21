@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 adapter, recorder, artifact, manifest, validator, cargo_baseline, binary_baseline, tests_baseline, tmp = sys.argv[1:]
-base = [adapter, "buck-artifact", "--build-mode", "--artifact", artifact, "--manifest", manifest, "--validator", validator, "--cargo-baseline", cargo_baseline, "--binary-baseline", binary_baseline, "--tests-baseline", tests_baseline, "--runtime-resource", os.path.join(os.path.dirname(adapter), "runtime/buck2_artifact_runtime.txt"), "--source-denial", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--cargo-command", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--python-command", "python3", "--cargo-nextest-command", recorder, "nextest"]
+base = [adapter, "buck-artifact", "--build-mode", "--artifact", artifact, "--manifest", manifest, "--validator", validator, "--cargo-baseline", cargo_baseline, "--binary-baseline", binary_baseline, "--tests-baseline", tests_baseline, "--runtime-resource", os.path.join(os.path.dirname(adapter), "runtime/buck2_artifact_runtime.txt"), "--source-denial", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--action-metadata-parser", os.path.join(os.path.dirname(adapter), "tools/nextest_buck_artifact_action_metadata.py"), "--cargo-command", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--python-command", os.path.join(os.path.dirname(adapter), "tools/nextest_python_launcher.sh"), "--cargo-nextest-command", recorder, "nextest"]
 cases = [("alpha", "test(=pass_case)"), ("beta", "test(=pass_case) && name ~ beta")]
 processes = []
 try:

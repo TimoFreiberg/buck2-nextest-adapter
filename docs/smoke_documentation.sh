@@ -22,6 +22,9 @@ grep -F 'Process interruption, abort, and cancellation have no stable adapter cl
 grep -F 'observation/regeneration inputs only' "$readme" >/dev/null
 grep -F 'nextest_buck_artifact_junit' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'local-only' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'BUCK_SCRATCH_PATH' "$readme" "$baseline" >/dev/null
+grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'observability gap' "$readme" "$baseline" >/dev/null
 grep -F 'buck clean' "$readme" "$baseline" >/dev/null
 grep -F 'caller-owned' "$baseline" >/dev/null
 grep -F 'DefaultInfo' "$readme" "$baseline" >/dev/null
@@ -65,7 +68,7 @@ grep -F 'report temporary-file permissions' "$follow_up" >/dev/null
 grep -F 'process-group prerequisite' "$follow_up" >/dev/null
 grep -F 'action graph wiring' "$follow_up" >/dev/null
 grep -F 'DefaultInfo' "$follow_up" >/dev/null
-grep -F 'restricted-PATH runtime fixture remains a documented follow-up' "$follow_up" >/dev/null
+grep -F 'relocated/sanitized declared-input scenario is available as a repository-level check' "$follow_up" >/dev/null
 
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"

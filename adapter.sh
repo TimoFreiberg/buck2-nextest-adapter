@@ -10,7 +10,7 @@ final_status=2
 pending_signal=
 
 usage() {
-    printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--profile NAME] [--filter EXPRESSION] [--no-tests auto|pass|warn|fail] [--report-skipped default|ignored] [--timeout-seconds N]' >&2
+    printf '%s\n' 'usage: adapter.sh buck-artifact --artifact PATH --manifest PATH --validator PATH --cargo-baseline PATH --binary-baseline PATH --tests-baseline PATH --junit-report PATH [--build-mode --cargo-command PATH --python-command PATH --cargo-nextest-command PATH SUBCOMMAND --runtime-resource PATH --source-denial PATH --action-metadata-parser PATH] [--profile NAME] [--filter EXPRESSION] [--no-tests auto|pass|warn|fail] [--report-skipped default|ignored] [--timeout-seconds N]' >&2
 }
 
 cleanup_and_exit() {
@@ -61,7 +61,8 @@ invocation_cwd=$(pwd -P) || fail 'could not resolve invocation cwd'
 mode=
 build_mode=false
 cargo_command=${BUCK2_NEXTEST_CARGO_COMMAND:-}
-python_command=${BUCK2_NEXTEST_PYTHON_COMMAND:-python3}
+python_command=${BUCK2_NEXTEST_PYTHON_COMMAND:-}
+python_command_explicit=false
 cargo_nextest_command=${BUCK2_NEXTEST_CARGO_NEXTEST_COMMAND:-}
 cargo_nextest_subcommand=${BUCK2_NEXTEST_CARGO_NEXTEST_SUBCOMMAND:-nextest}
 runtime_resource=${BUCK2_NEXTEST_RUNTIME_RESOURCE:-}
@@ -84,6 +85,7 @@ validator=${BUCK2_NEXTEST_VALIDATOR:-}
 baseline_cargo=${BUCK2_NEXTEST_CARGO_BASELINE:-}
 baseline_binaries=${BUCK2_NEXTEST_BINARY_BASELINE:-}
 baseline_tests=${BUCK2_NEXTEST_TESTS_BASELINE:-}
+action_metadata_parser=${BUCK2_NEXTEST_ACTION_METADATA_PARSER:-}
 junit_report=
 
 while [ "$#" -gt 0 ]; do
@@ -150,8 +152,9 @@ while [ "$#" -gt 0 ]; do
             ;;
         --python-command)
             [ "$#" -ge 2 ] || fail '--python-command requires a value'
-            [ "$python_command" = python3 ] || fail 'python command specified more than once'
+            [ "$python_command_explicit" = false ] || fail 'python command specified more than once'
             python_command=$2
+            python_command_explicit=true
             option_command_mode=true
             shift 2
             ;;
@@ -174,6 +177,13 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || fail '--source-denial requires a value'
             [ -z "$source_denial_arg" ] || fail 'source-denial specified more than once'
             source_denial_arg=$2
+            option_command_mode=true
+            shift 2
+            ;;
+        --action-metadata-parser)
+            [ "$#" -ge 2 ] || fail '--action-metadata-parser requires a value'
+            [ -z "$action_metadata_parser" ] || fail 'action metadata parser specified more than once'
+            action_metadata_parser=$2
             option_command_mode=true
             shift 2
             ;;
@@ -221,6 +231,17 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ "$mode" = buck-artifact ] || fail 'the required mode is buck-artifact'
+if [ "$build_mode" = true ]; then
+    [ "$python_command_explicit" = true ] || fail 'build mode requires --python-command'
+    [ -n "$python_command" ] || fail 'build mode requires --python-command'
+    [ "$cargo_nextest_subcommand" = nextest ] || fail 'build mode requires nextest subcommand'
+    [ -n "$cargo_command" ] || fail 'build mode requires --cargo-command'
+    [ -n "$cargo_nextest_command" ] || fail 'build mode requires --cargo-nextest-command'
+    [ -n "$runtime_resource" ] || fail 'build mode requires --runtime-resource'
+    [ -n "$source_denial_arg" ] || fail 'build mode requires --source-denial'
+else
+    [ -n "$python_command" ] || python_command=python3
+fi
 config_error=$($python_command - "$profile" "$filterset" "$no_tests" "$report_skipped" "$timeout_seconds" <<'PY'
 import re
 import sys
@@ -250,17 +271,14 @@ PY
 [ -n "$baseline_cargo" ] && [ -n "$baseline_binaries" ] && [ -n "$baseline_tests" ] || fail 'buck-artifact requires all three baseline metadata inputs'
 [ -n "$junit_report" ] || fail 'buck-artifact requires --junit-report PATH'
 if [ "$build_mode" = true ]; then
-    for variable in cargo_command python_command cargo_nextest_command runtime_resource source_denial_arg; do
+    for variable in cargo_command python_command cargo_nextest_command runtime_resource source_denial_arg action_metadata_parser; do
         eval "value=\${$variable}"
         case "$value" in
             /*) ;;
             */*) eval "$variable=\$invocation_cwd/\$value" ;;
         esac
     done
-    [ -n "$cargo_command" ] || fail 'build mode requires --cargo-command'
-    [ -n "$cargo_nextest_command" ] || fail 'build mode requires --cargo-nextest-command'
-    [ -n "$runtime_resource" ] || fail 'build mode requires --runtime-resource'
-    [ -n "$source_denial_arg" ] || fail 'build mode requires --source-denial'
+    [ -n "$action_metadata_parser" ] || fail 'build mode requires --action-metadata-parser'
 fi
 [ -x "$artifact" ] && [ -f "$artifact" ] && [ ! -L "$artifact" ] || fail "declared Buck artifact is not an executable regular file: $artifact"
 [ -r "$manifest_input" ] && [ -f "$manifest_input" ] && [ ! -L "$manifest_input" ] || fail "manifest is not a readable regular file: $manifest_input"
@@ -273,10 +291,19 @@ fi
 for input in "$baseline_cargo" "$baseline_binaries" "$baseline_tests"; do
     [ -r "$input" ] && [ -f "$input" ] && [ ! -L "$input" ] || fail "baseline metadata is not a readable regular file: $input"
 done
-if [ "$option_command_mode" = false ]; then
+if [ "$build_mode" = true ]; then
+    for input in "$cargo_command" "$python_command" "$cargo_nextest_command" "$runtime_resource" "$source_denial_arg" "$action_metadata_parser"; do
+        [ -r "$input" ] && [ -f "$input" ] && [ ! -L "$input" ] || fail "declared build resource is not a readable regular file: $input"
+    done
+    [ -x "$cargo_command" ] || fail "declared Cargo command is not executable: $cargo_command"
+    [ -x "$python_command" ] || fail "declared Python command is not executable: $python_command"
+    [ -x "$cargo_nextest_command" ] || fail "declared cargo-nextest command is not executable: $cargo_nextest_command"
+else
+    if [ "$option_command_mode" = false ]; then
     command -v cargo >/dev/null 2>&1 || fail 'cargo is not available on PATH'
     command -v python3 >/dev/null 2>&1 || fail 'python3 is not available on PATH'
-    real_cargo_command=$(command -v cargo)
+        real_cargo_command=$(command -v cargo)
+    fi
 fi
 
 junit_report=$($python_command - "$invocation_cwd" "$junit_report" <<'PY'
@@ -326,7 +353,17 @@ if [ "${BUCK2_NEXTEST_REQUIRE_PROCESS_GROUP:-0}" = 1 ] && [ -z "$launcher" ]; th
     fail 'setsid is required for signal-cleanup scenarios but is unavailable'
 fi
 
-private_root=$(mktemp -d "${TMPDIR:-/tmp}/buck2-nextest-buck-artifact.XXXXXX") || fail 'could not create private root'
+if [ -n "${BUCK_SCRATCH_PATH:-}" ]; then
+    scratch_parent=$BUCK_SCRATCH_PATH
+    case "$scratch_parent" in
+        /*) ;;
+        *) scratch_parent=$invocation_cwd/$scratch_parent ;;
+    esac
+    [ -d "$scratch_parent" ] || fail 'BUCK_SCRATCH_PATH is not an existing directory'
+else
+    scratch_parent=${TMPDIR:-/tmp}
+fi
+private_root=$(mktemp -d "$scratch_parent/buck2-nextest-buck-artifact.XXXXXX") || fail "could not create private root under $scratch_parent"
 mkdir -p "$private_root/workspace/src" "$private_root/workspace/.config" "$private_root/target/debug/deps" "$private_root/cargo-home" || fail 'could not create private staging directories'
 cp "$manifest_input" "$private_root/manifest.json" || fail 'could not stage manifest'
 cp "$validator_script" "$private_root/nextest_artifact.py" || fail 'could not stage validator'
@@ -335,7 +372,7 @@ cp "$baseline_binaries" "$private_root/baseline-binaries.json" || fail 'could no
 cp "$baseline_tests" "$private_root/baseline-tests.json" || fail 'could not stage tests baseline'
 
 source_denial=$source_denial_arg
-if [ -z "$source_denial" ]; then
+if [ -z "$source_denial" ] && [ "$build_mode" = false ]; then
     source_denial="$resource_root/tools/cargo_source_denial.sh"
     [ -r "$source_denial" ] || source_denial="$resource_root/cargo_source_denial.sh"
 fi
@@ -343,6 +380,21 @@ fi
 cp "$source_denial" "$private_root/cargo" || fail 'could not stage source-denial cargo wrapper'
 cp "$source_denial" "$private_root/rustc" || fail 'could not stage source-denial rustc wrapper'
 chmod +x "$private_root/cargo" "$private_root/rustc" || fail 'could not make source-denial wrappers executable'
+
+if [ "$build_mode" = true ] && [ -n "${BUCK2_NEXTEST_ACTION_METADATA:-}" ]; then
+    metadata_path=${BUCK2_NEXTEST_ACTION_METADATA}
+    [ -n "$action_metadata_parser" ] || fail 'build mode requires --action-metadata-parser'
+    case "$metadata_path" in
+        /*) ;;
+        *) metadata_path=$invocation_cwd/$metadata_path ;;
+    esac
+    [ -r "$metadata_path" ] && [ -f "$metadata_path" ] && [ ! -L "$metadata_path" ] || fail 'action metadata file is not readable'
+    $python_command "$action_metadata_parser" --metadata "$metadata_path" \
+        --adapter "$0" --cargo-nextest "$cargo_nextest_command" --python "$python_command" \
+        --cargo "$cargo_command" --source-denial "$source_denial" --validator "$validator_script" \
+        --cargo-baseline "$baseline_cargo" --binary-baseline "$baseline_binaries" --tests-baseline "$baseline_tests" \
+        --runtime-resource "$runtime_resource" --manifest "$manifest_input" --artifact "$artifact" || fail 'action metadata validation failed'
+fi
 
 $python_command "$private_root/nextest_artifact.py" validate-manifest --manifest "$private_root/manifest.json" --root "$private_root" --allow-missing || fail 'manifest validation failed'
 if [ "$build_mode" = true ]; then
@@ -456,6 +508,8 @@ nextest_with_metadata() {
         "$cargo_nextest_command" "$cargo_nextest_subcommand" "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
     elif [ -n "$launcher" ]; then
         "$launcher" cargo nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
+    elif [ "$option_command_mode" = true ]; then
+        "$cargo_command" nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
     else
         "$real_cargo_command" nextest "$@" --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace"
     fi
@@ -489,7 +543,13 @@ printf 'buck2-nextest-adapter: exec cargo nextest run --profile %s --filterset %
 output_mode=--success-output
 [ "$filterset" = 'test(=fail_case)' ] && output_mode=--failure-output
 state=RUNNING
-nextest_with_metadata run --profile "$profile" --message-format human --filterset "$filterset" --no-tests "$no_tests" "$output_mode" immediate-final &
+if [ "$build_mode" = true ] && [ -n "$launcher" ]; then
+    "$launcher" "$cargo_nextest_command" "$cargo_nextest_subcommand" run --profile "$profile" --message-format human --filterset "$filterset" --no-tests "$no_tests" "$output_mode" immediate-final --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace" &
+elif [ "$build_mode" = true ]; then
+    "$cargo_nextest_command" "$cargo_nextest_subcommand" run --profile "$profile" --message-format human --filterset "$filterset" --no-tests "$no_tests" "$output_mode" immediate-final --cargo-metadata "$private_root/meta/cargo-metadata.json" --binaries-metadata "$private_root/meta/binaries-metadata.json" --target-dir-remap "$private_root/target" --build-dir-remap "$private_root/target" --workspace-remap "$private_root/workspace" &
+else
+    nextest_with_metadata run --profile "$profile" --message-format human --filterset "$filterset" --no-tests "$no_tests" "$output_mode" immediate-final &
+fi
 child_pid=$!
 [ -n "$launcher" ] && child_pgid=$child_pid
 wait "$child_pid"
