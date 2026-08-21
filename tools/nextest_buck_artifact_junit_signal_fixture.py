@@ -27,6 +27,28 @@ profile = args[args.index("--profile") + 1]
 target = Path(os.environ["CARGO_MANIFEST_DIR"]) / "target" / "nextest" / profile
 target.mkdir(parents=True, exist_ok=True)
 state = {"terminated": False}
+child_pid_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_CHILD_PID"])
+grandchild_pid_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_GRANDCHILD_PID"])
+child_terminated_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_CHILD_TERMINATED"])
+grandchild_terminated_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_GRANDCHILD_TERMINATED"])
+
+def child_loop():
+    def child_term(_signum, _frame):
+        child_terminated_path.write_text("signal-fixture-child=terminated\n", encoding="utf-8")
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, child_term)
+    grandchild = os.fork()
+    if grandchild == 0:
+        def grandchild_term(_signum, _frame):
+            grandchild_terminated_path.write_text("signal-fixture-grandchild=terminated\n", encoding="utf-8")
+            raise SystemExit(0)
+        signal.signal(signal.SIGTERM, grandchild_term)
+        grandchild_pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+        while True:
+            time.sleep(1)
+    child_pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    while True:
+        time.sleep(1)
 
 def terminate(signum, _frame):
     if not state["terminated"]:
@@ -38,6 +60,11 @@ def terminate(signum, _frame):
 signal.signal(signal.SIGTERM, terminate)
 signal.signal(signal.SIGINT, terminate)
 pid_path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+child = os.fork()
+if child == 0:
+    child_loop()
+while not child_pid_path.exists() or not grandchild_pid_path.exists():
+    time.sleep(0.01)
 ready_path.write_text("signal-fixture=ready\n", encoding="utf-8")
 while True:
     time.sleep(1)

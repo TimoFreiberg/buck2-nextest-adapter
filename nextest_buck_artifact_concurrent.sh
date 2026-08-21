@@ -10,17 +10,20 @@ tests_baseline=$6
 recorder=$root/nextest_test_recorder.py
 [ -f "$recorder" ] || recorder="$root/../nextest_test_recorder.py"
 recorder=$(cd "$(dirname "$recorder")" && pwd -P)/$(basename "$recorder")
+python_launcher=$root/tools/nextest_python_launcher.sh
+[ -x "$python_launcher" ] || python_launcher="$root/../tools/nextest_python_launcher.sh"
+python_launcher=$(cd "$(dirname "$python_launcher")" && pwd -P)/$(basename "$python_launcher")
 tmp=$(mktemp -d "./.buck2-nextest-concurrent.XXXXXX")
 tmp=$(cd "$tmp" && pwd -P)
 trap 'rm -rf "$tmp"' EXIT
-python3 - "$root/adapter.sh" "$recorder" "$artifact" "$manifest" "$validator" "$cargo_baseline" "$binary_baseline" "$tests_baseline" "$tmp" <<'PY'
+python3 - "$root/adapter.sh" "$recorder" "$python_launcher" "$artifact" "$manifest" "$validator" "$cargo_baseline" "$binary_baseline" "$tests_baseline" "$tmp" <<'PY'
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-adapter, recorder, artifact, manifest, validator, cargo_baseline, binary_baseline, tests_baseline, tmp = sys.argv[1:]
-base = [adapter, "buck-artifact", "--build-mode", "--artifact", artifact, "--manifest", manifest, "--validator", validator, "--cargo-baseline", cargo_baseline, "--binary-baseline", binary_baseline, "--tests-baseline", tests_baseline, "--runtime-resource", os.path.join(os.path.dirname(adapter), "runtime/buck2_artifact_runtime.txt"), "--source-denial", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--action-metadata-parser", os.path.join(os.path.dirname(adapter), "tools/nextest_buck_artifact_action_metadata.py"), "--cargo-command", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--python-command", os.path.join(os.path.dirname(adapter), "tools/nextest_python_launcher.sh"), "--cargo-nextest-command", recorder, "nextest"]
+adapter, recorder, python_launcher, artifact, manifest, validator, cargo_baseline, binary_baseline, tests_baseline, tmp = sys.argv[1:]
+base = [adapter, "buck-artifact", "--build-mode", "--artifact", artifact, "--manifest", manifest, "--validator", validator, "--cargo-baseline", cargo_baseline, "--binary-baseline", binary_baseline, "--tests-baseline", tests_baseline, "--runtime-resource", os.path.join(os.path.dirname(adapter), "runtime/buck2_artifact_runtime.txt"), "--source-denial", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--action-metadata-parser", os.path.join(os.path.dirname(adapter), "tools/nextest_buck_artifact_action_metadata.py"), "--cargo-command", os.path.join(os.path.dirname(adapter), "tools/cargo_source_denial.sh"), "--python-command", python_launcher, "--cargo-nextest-command", recorder, "nextest"]
 cases = [("alpha", "test(=pass_case)"), ("beta", "test(=pass_case) && name ~ beta")]
 processes = []
 try:

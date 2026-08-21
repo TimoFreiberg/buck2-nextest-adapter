@@ -1,4 +1,4 @@
-load(":nextest.bzl", "nextest_system_tool", "nextest_toolchain")
+load(":nextest.bzl", "nextest_bundle_resource", "nextest_system_tool", "nextest_toolchain")
 load("@prelude//toolchains:demo.bzl", "system_demo_toolchains")
 system_demo_toolchains()
 
@@ -24,12 +24,22 @@ nextest_system_tool(
     executable = "root//:nextest-cargo-nextest-v2-executable",
 )
 
+nextest_bundle_resource(
+    name = "fixture-runtime-resource",
+    resource = "root//:nextest-bundle-runtime-resource",
+    path = "runtime/fixture-resource.txt",
+    digest = "sha256:5fbd981ca9311519215669ba854c8110d4f58bd015d49827e979280e0500bfe1:34",
+)
+
 nextest_toolchain(
     name = "nextest",
     visibility = ["PUBLIC"],
     cargo = ":nextest-cargo",
     python = ":nextest-python",
     cargo_nextest = ":nextest-cargo-nextest-v1",
+    bundle_resources = [":fixture-runtime-resource"],
+    bundle_environment = [["BUCK2_BUNDLE_RESOURCE", "relative_path", "runtime/fixture-resource.txt"], ["BUCK2_BUNDLE_LITERAL", "literal", "declared"]],
+    bundle_platform = "local-fixture-v1",
 )
 
 nextest_toolchain(
@@ -38,6 +48,9 @@ nextest_toolchain(
     cargo = ":nextest-cargo",
     python = ":nextest-python",
     cargo_nextest = ":nextest-cargo-nextest-v1",
+    bundle_resources = [":fixture-runtime-resource"],
+    bundle_environment = [["BUCK2_BUNDLE_RESOURCE", "relative_path", "runtime/fixture-resource.txt"], ["BUCK2_BUNDLE_LITERAL", "literal", "declared"]],
+    bundle_platform = "local-fixture-v1",
 )
 
 nextest_toolchain(
@@ -46,4 +59,7 @@ nextest_toolchain(
     cargo = ":nextest-cargo",
     python = ":nextest-python",
     cargo_nextest = ":nextest-cargo-nextest-v2",
+    bundle_resources = [":fixture-runtime-resource"],
+    bundle_environment = [["BUCK2_BUNDLE_RESOURCE", "relative_path", "runtime/fixture-resource.txt"], ["BUCK2_BUNDLE_LITERAL", "literal", "declared"]],
+    bundle_platform = "local-fixture-v2",
 )

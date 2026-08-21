@@ -1,4 +1,4 @@
-load("@toolchains//:nextest.bzl", "NextestBuckToolchainInfo")
+load("@toolchains//:nextest.bzl", "NextestBuckToolchainInfo", "nextest_bundle_json")
 
 
 def _nextest_buck_artifact_junit_impl(ctx):
@@ -6,6 +6,16 @@ def _nextest_buck_artifact_junit_impl(ctx):
         fail("timeout_seconds must be between 0 and 86400")
     output = ctx.actions.declare_output("junit.xml")
     toolchain = ctx.attrs._nextest_toolchain[NextestBuckToolchainInfo]
+    bundle_resources = toolchain.bundle_resources
+    bundle_json = nextest_bundle_json(
+        toolchain.bundle_version,
+        toolchain.bundle_platform,
+        bundle_resources,
+        toolchain.bundle_environment,
+    )
+    resource_inputs = []
+    for resource in bundle_resources:
+        resource_inputs.append(resource["source"])
 
     command = cmd_args([
         ctx.attrs._adapter[RunInfo],
@@ -20,9 +30,13 @@ def _nextest_buck_artifact_junit_impl(ctx):
         "--runtime-resource", ctx.attrs.runtime_resource,
         "--source-denial", ctx.attrs.source_denial,
         "--action-metadata-parser", ctx.attrs.action_metadata_parser,
-        "--cargo-command", toolchain.cargo.args,
-        "--python-command", toolchain.python.args,
-        "--cargo-nextest-command", toolchain.cargo_nextest.args, "nextest",
+        "--cargo-argv", toolchain.cargo.args, "--end-argv",
+        "--python-argv", toolchain.python.args, "--end-argv",
+        "--cargo-nextest-argv", toolchain.cargo_nextest.args, "nextest", "--end-argv",
+        "--bundle-json", bundle_json,
+        "--bundle-resources",
+        resource_inputs,
+        "--end-bundle-resources",
         "--junit-report", output.as_output(),
         "--profile", ctx.attrs.profile,
         "--filter", ctx.attrs.filter,

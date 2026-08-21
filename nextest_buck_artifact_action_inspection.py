@@ -60,21 +60,35 @@ for target_key, action in actions.items():
         "--no-tests",
         "--report-skipped",
         "--timeout-seconds",
-        "--cargo-command",
-        "--python-command",
-        "--cargo-nextest-command",
+        "--cargo-argv",
+        "--python-argv",
+        "--cargo-nextest-argv",
+        "--bundle-json",
+        "--bundle-resources",
         "--action-metadata-parser",
     ):
         assert pair in command, (pair, command)
-    assert "--cargo-command" in command, command
-    assert "--python-command" in command, command
-    cargo_nextest_index = command.index("--cargo-nextest-command")
+    cargo_nextest_index = command.index("--cargo-nextest-argv")
     assert cargo_nextest_index + 2 < len(command), command
     if target.endswith("tool_v2"):
         assert "nextest-cargo-nextest-v2" in command[cargo_nextest_index + 1], command
     else:
         assert "nextest-cargo-nextest-v1" in command[cargo_nextest_index + 1], command
     assert command[cargo_nextest_index + 2] == "nextest", command
+    assert command[cargo_nextest_index + 3] == "--end-argv", command
+    bundle_index = command.index("--bundle-json")
+    bundle_text = action["cmd"].split("--bundle-json, ", 1)[1].split(", --bundle-resources", 1)[0]
+    bundle = json.loads(bundle_text.replace('\\"', '"'))
+    assert bundle["bundle_version"] == 1, bundle
+    assert bundle["bundle_platform"].startswith("local-fixture-v"), bundle
+    assert bundle["bundle_resources"] == [{
+        "digest": "sha256:5fbd981ca9311519215669ba854c8110d4f58bd015d49827e979280e0500bfe1:34",
+        "path": "runtime/fixture-resource.txt",
+        "source": "nextest-bundle-runtime-resource",
+    }], bundle
+    assert command[bundle_index + 2] == "--bundle-resources", command
+    assert "nextest-bundle-runtime-resource" in command[bundle_index + 3], command
+    assert command[bundle_index + 4] == "--end-bundle-resources", command
     parser_index = command.index("--action-metadata-parser")
     assert parser_index + 1 < len(command), command
     assert "nextest_buck_artifact_action_metadata" in command[parser_index + 1], command

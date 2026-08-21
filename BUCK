@@ -42,6 +42,14 @@ filegroup(
 )
 
 genrule(
+    name = "nextest-bundle-runtime-resource",
+    visibility = ["PUBLIC"],
+    out = "nextest-bundle-runtime-resource.txt",
+    cmd = "cp runtime/buck2_artifact_runtime.txt $OUT",
+    srcs = ["runtime/buck2_artifact_runtime.txt"],
+)
+
+genrule(
     name = "runtime_resource",
     out = "runtime/buck2_artifact_runtime.txt",
     cmd = "cp runtime/buck2_artifact_runtime.txt $OUT",
@@ -333,6 +341,28 @@ sh_test(
 )
 
 sh_test(
+    name = "adapter_bundle_validation",
+    test = "adapter_bundle_validation.sh",
+    args = [
+        "$(location :buck2_nextest_rust_test)",
+        "$(location :buck2_nextest_artifact_manifest)",
+        "$(source tools/nextest_artifact.py)",
+        "$(source baseline/normalized/cargo-metadata.json)",
+        "$(source baseline/normalized/binaries.json)",
+        "$(source baseline/normalized/tests.json)",
+    ],
+    resources = [
+        ":nextest_buck_artifact_runner",
+        "adapter.sh",
+        "adapter_bundle_validation.sh",
+        "runtime/buck2_artifact_runtime.txt",
+        "tools/cargo_source_denial.sh",
+        "tools/nextest_buck_artifact_action_metadata.py",
+        "nextest_test_recorder.py",
+    ],
+)
+
+sh_test(
     name = "adapter_mode_validation",
     test = "adapter_mode_validation.sh",
     args = [
@@ -364,6 +394,12 @@ sh_test(
         "tools/cargo_source_denial.sh",
         "nextest_test_recorder.py",
     ],
+)
+
+sh_test(
+    name = "nextest_buck_artifact_bundle_contract",
+    test = "nextest_buck_artifact_bundle_contract.sh",
+    resources = ["nextest_buck_artifact_bundle_contract.sh"],
 )
 
 sh_test(
@@ -487,6 +523,14 @@ sh_test(
     resources = ["nextest_capability_preflight.sh"],
 )
 
+# The capability probe and positive signal test are intentionally opt-in. Run
+# the positive target only after the probe reports process-group=available.
+sh_test(
+    name = "nextest_process_group_capability",
+    test = "nextest_process_group_capability.sh",
+    resources = ["nextest_process_group_capability.sh"],
+)
+
 sh_test(
     name = "nextest_buck_artifact_junit_signal",
     test = "nextest_buck_artifact_junit_signal.sh",
@@ -503,5 +547,5 @@ sh_test(
         "$(source tools/nextest_buck_artifact_action_metadata.py)",
         "$(location :nextest-python-executable)",
     ],
-    resources = ["nextest_buck_artifact_junit_signal.sh", ":nextest_buck_artifact_junit_signal_fixture", "tools/nextest_artifact.py", "tools/cargo_source_denial.sh", "tools/nextest_buck_artifact_action_metadata.py", "runtime/buck2_artifact_runtime.txt", ":baseline", ":buck2_nextest_artifact_manifest"],
+    resources = ["nextest_buck_artifact_junit_signal.sh", ":nextest_buck_artifact_junit_signal_fixture", "tools/nextest_artifact.py", "tools/cargo_source_denial.sh", "tools/nextest_buck_artifact_action_metadata.py", "tools/nextest_cargo_nextest_v1.py", "runtime/buck2_artifact_runtime.txt", ":baseline", ":buck2_nextest_artifact_manifest"],
 )

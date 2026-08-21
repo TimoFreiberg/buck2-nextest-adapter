@@ -9,7 +9,7 @@ This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds 
 - `cargo-nextest` 0.9.143, exposing metadata/remap, filterset, output, profile, and no-tests controls used here.
 - Python 3.11+ for strict manifest, metadata, XML-test, baseline tooling, and timeout profile assertions.
 
-No toolchain provisioning is included. Consumers provide Cargo, Python, and the cargo-nextest launcher as executable Buck targets exposing both `DefaultInfo` and `RunInfo`; the launcher is invoked with the fixed `nextest` subcommand. Cargo is declared and keyed for source-denial, but build mode does not dispatch it to compile or rediscover the artifact. This checkout's checked-in deterministic fixtures are local convenience configuration for tests, not a portable tool distribution or remote-ready toolchain. `setsid` is needed only for process-group signal-cleanup coverage. The current macOS host does not provide it, so that test reports the prerequisite blocker rather than claiming unsupported coverage.
+No toolchain provisioning is included. Consumers provide Cargo, Python, and the cargo-nextest launcher as executable Buck targets exposing both `DefaultInfo` and `RunInfo`; the launcher is invoked with the fixed `nextest` subcommand. The v1 `nextest_toolchain` contract also declares an ordered bundle of regular execution resources, normalized POSIX destinations, `sha256:<hex>:<size>` identities, typed literal/relative-path environment records, and an opaque non-empty `bundle_platform` identity. Every interpreter, launcher support file, shared library, or other runtime file not supplied by `RunInfo` must be a bundle resource; the adapter does not infer or obtain ambient runtime files in build mode. This checkout's deterministic fixtures are local convenience configuration for tests, while the bundle contract is the local readiness boundary for future relocation/remote experiments. Production remains `local_only = True` with cache upload disabled. `setsid` is needed only for process-group signal-cleanup coverage; unsupported hosts omit the positive cancellation test rather than reporting it as passing.
 
 ## Canonical invocation
 
@@ -63,7 +63,7 @@ nextest_toolchain(
 )
 ```
 
-Each target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is a launcher target used with the fixed `nextest` subcommand. The repository's fixtures under `tools/` are local convenience targets only.
+Each target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is a launcher target used with the fixed `nextest` subcommand. A consumer may attach `nextest_bundle_resource` targets to the toolchain. Resource `path` values are relative normalized POSIX paths and resource digests are provider-owned `sha256:<hex>:<size>` values checked before and after staging. Environment entries are ordered `[name, kind, value]` records where `kind` is `literal` or `relative_path`; names are unique and may not replace adapter-owned variables. `bundle_platform` is an opaque execution identity, not the test artifact target triple and not a host `uname` inference. Invalid versions, paths, digests, environment records, or platform identities fail before probing nextest. The repository's fixtures under `tools/` are local convenience targets only; shared libraries and interpreters are not automatically discovered.
 
 The fixed declared-output build surface runs the successful `pass_case` contract as a keyed, local-only Buck action:
 
@@ -109,4 +109,4 @@ The checked-in Cargo fixture and `tools/capture_cargo_nextest_baseline.sh` are o
 
 ## Scope boundary
 
-This milestone does not add an adapter-owned XML/result schema, parse human output, use experimental libtest JSON, define an internal event protocol, or cover retries, remote execution, generated outputs beyond the existing contract, shared libraries, direct nextest embedding, native provider promotion, or stable abort/cancel mapping.
+This milestone does not add an adapter-owned XML/result schema, parse human output, use experimental libtest JSON, define an internal event protocol, or cover retries, generated outputs beyond the existing contract, direct nextest embedding, native provider promotion, or stable abort/cancel mapping. It remains a single local-only action: no remote executor, worker/delegation model, per-test remote scheduling, credentials, or mandatory remote CI is configured. An opt-in future remote gate must independently verify resource materialization, cancellation and descendant teardown, successful and failed output retrieval, and cache behavior on a supported Buck2 RE backend; local tests cannot claim those backend properties.

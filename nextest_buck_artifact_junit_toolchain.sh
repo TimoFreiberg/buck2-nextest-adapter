@@ -10,6 +10,10 @@ grep -F 'attrs.exec_dep' "$toolchain_bzl"
 grep -F 'providers = [DefaultInfo, RunInfo]' "$toolchain_bzl"
 grep -F 'default_outputs' "$toolchain_bzl"
 grep -F 'RunInfo(args = cmd_args' "$toolchain_bzl"
+grep -F 'NextestBuckBundleResourceInfo' "$toolchain_bzl"
+grep -F 'bundle_version' "$toolchain_bzl"
+grep -F 'bundle_environment' "$toolchain_bzl"
+grep -F 'bundle_platform' "$toolchain_bzl"
 python3 - "$output" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
