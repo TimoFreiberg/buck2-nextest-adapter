@@ -5,10 +5,21 @@ import sys
 from pathlib import Path
 
 args = sys.argv[1:]
+record_helper = os.environ.get("ADAPTER_RELOCATED_RECORD_HELPER")
+record_dir = os.environ.get("ADAPTER_RELOCATED_RECORD_DIR")
+if record_helper and record_dir and not os.path.isfile(record_helper):
+    record_helper = os.path.join(os.environ.get("BUCK_PROJECT_ROOT", "."), "tools", "nextest_relocated_records.py")
+if record_dir and record_helper:
+    import subprocess
+    subprocess.run(["/usr/bin/python3", record_helper, "write-fixture", sys.argv[0]], check=True)
 log = os.environ.get("BUCK2_NEXTEST_ARGV_LOG")
 marker = os.environ.get("BUCK2_NEXTEST_TOOL_MARKER")
 if marker:
     Path(marker).write_text("v1\n", encoding="utf-8")
+dispatch_log = os.environ.get("BUCK2_NEXTEST_DISPATCH_LOG")
+if dispatch_log:
+    with open(dispatch_log, "a", encoding="utf-8") as stream:
+        stream.write("top-level cargo nextest dispatch: %s\n" % " ".join(args))
 if log:
     with open(log, "a", encoding="utf-8") as stream:
         json.dump(args, stream, ensure_ascii=False)

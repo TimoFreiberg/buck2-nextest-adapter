@@ -87,7 +87,7 @@ genrule(
     srcs = ["baseline/normalized/tests.json"],
 )
 
-load(":nextest.bzl", "nextest_buck_artifact_junit")
+load(":nextest.bzl", "nextest_buck_artifact_junit", "nextest_executable")
 
 sh_binary(
     name = "nextest-cargo-executable",
@@ -96,18 +96,18 @@ sh_binary(
     append_script_extension = False,
 )
 
-sh_binary(
+nextest_executable(
     name = "nextest-python-executable",
     visibility = ["PUBLIC"],
-    main = "tools/nextest_python_launcher.sh",
-    append_script_extension = False,
+    source = "tools/nextest_python_launcher.sh",
+    out = "nextest-python-executable",
 )
 
-sh_binary(
+nextest_executable(
     name = "nextest-cargo-nextest-v1-executable",
     visibility = ["PUBLIC"],
-    main = "tools/nextest_cargo_nextest_v1.py",
-    append_script_extension = False,
+    source = "tools/nextest_cargo_nextest_v1.py",
+    out = "nextest-cargo-nextest-v1-executable",
 )
 
 sh_binary(

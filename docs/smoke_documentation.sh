@@ -34,7 +34,10 @@ grep -F 'worker-side execution' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'nextest_buck_artifact_remote_selftest' "$readme" >/dev/null
 ! grep -F 'local-only' "$readme" "$roadmap" >/dev/null
 grep -F 'BUCK_SCRATCH_PATH' "$readme" "$baseline" >/dev/null
-grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'required default CI coverage: just ci runs adapter_relocated_sanitized' "$readme" >/dev/null
+grep -F 'missing relocation prerequisites fail CI with diagnostics' "$readme" >/dev/null
+ grep -F 'repository-level check, not a nested sh_test' "$readme" >/dev/null
+ grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'observability gap' "$readme" "$baseline" >/dev/null
 grep -F 'buck clean' "$readme" "$baseline" >/dev/null
 grep -F 'caller-owned' "$baseline" >/dev/null
@@ -79,7 +82,7 @@ grep -F 'report temporary-file permissions' "$follow_up" >/dev/null
 grep -F 'process-group prerequisite' "$follow_up" >/dev/null
 grep -F 'action graph wiring' "$follow_up" >/dev/null
 grep -F 'DefaultInfo' "$follow_up" >/dev/null
-grep -F 'relocated/sanitized declared-input scenario is available as a repository-level check' "$follow_up" >/dev/null
+grep -F 'relocated/sanitized declared-input scenario is required repository-level CI coverage' "$follow_up" >/dev/null
 
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"

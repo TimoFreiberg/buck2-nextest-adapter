@@ -1,6 +1,28 @@
 load("@toolchains//:nextest.bzl", "NextestBuckToolchainInfo", "nextest_bundle_json")
 
 
+def _nextest_executable_impl(ctx):
+    output = ctx.actions.declare_output(ctx.attrs.out)
+    ctx.actions.run(cmd_args([
+        "sh",
+        "-c",
+        'cp "$1" "$2" && chmod +x "$2"',
+        "nextest-executable-copy",
+        ctx.attrs.source,
+        output.as_output(),
+    ]), category = "nextest_executable_copy")
+    return [DefaultInfo(default_output = output), RunInfo(args = cmd_args(output))]
+
+
+nextest_executable = rule(
+    impl = _nextest_executable_impl,
+    attrs = {
+        "source": attrs.source(),
+        "out": attrs.string(),
+    },
+)
+
+
 def _nextest_buck_artifact_junit_impl(ctx):
     if ctx.attrs.timeout_seconds < 0 or ctx.attrs.timeout_seconds > 86400:
         fail("timeout_seconds must be between 0 and 86400")

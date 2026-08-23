@@ -2,7 +2,7 @@
 
 ## Current position
 
-The repository proves one canonical local Buck2-built artifact handoff:
+The repository proves one canonical local Buck2-built artifact handoff. Required default CI coverage: `just ci` runs `adapter_relocated_sanitized` as a repository-level check, not a nested `sh_test`; missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch. The check uses a relocated working directory, sanitized PATH, explicit Buck-produced tools/resources, and Buck-owned scratch. Its additional Buck build/execution cost is intentional; `adapter.sh` product/runtime behavior is unchanged.
 
 ```text
 Buck2 rust_test
@@ -276,8 +276,7 @@ not on the initial Cargo fixture.
 
 Keep the completed JUnit/status boundary stable. The declared-tool portability,
 action-key experiment, lifecycle determinism, and Buck-level concurrency checks are
-the immediate hardening surface. The restricted-PATH runtime fixture remains a
-separate environment-specific follow-up and is not a passing CI check. The cache
+the immediate hardening surface. The restricted-PATH runtime fixture is now required local CI coverage through the repository-level `adapter_relocated_sanitized` check. Its host prerequisite policy is fail-closed with actionable diagnostics. Process-group signal cleanup and live remote execution remain separate environment-dependent, explicitly opt-in gates and are not implied by this local relocation proof. The cache
 check deliberately reports its execution-observability gap rather than claiming a
 cache hit from identical bytes. The local-preferred action policy and the
 fail-closed `nextest_buck_artifact_remote` gate are now the remote-readiness slice:

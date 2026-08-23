@@ -15,6 +15,8 @@ No toolchain provisioning is included. Consumers provide Cargo, Python, and the 
 
 `buck-artifact` is the only supported adapter mode:
 
+required default CI coverage: just ci runs adapter_relocated_sanitized. repository-level check, not a nested sh_test. missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch. The check rebuilds the four Buck outputs and hands them to the adapter from a relocated working directory. `just ci` incurs the check's additional Buck build/execution cost; `adapter.sh` product/runtime behavior is unchanged. The supported local host boundary is POSIX with the named relocation utilities, an ambient build-time `python3`, and the fixed `/usr/bin/python3` launcher interpreter. Process-group and live-remote checks remain explicitly opt-in capability gates.
+
 ```text
 adapter.sh buck-artifact \
   --artifact PATH \
