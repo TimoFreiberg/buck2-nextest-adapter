@@ -247,6 +247,16 @@ never substitutes for a backend. Cache validation, cancellation/descendant
 teardown, failed-output retrieval, per-test delegation, and remote CI remain
 deferred.
 
+**Follow-up: resolve Buck2 RE platform propagation.** The current Buck2/BuildBarn
+smoke setup made a real remote Execute attempt, but the request arrived with an
+empty RE platform even though the caller-owned execution platform declared
+`OSFamily` and `container-image` properties. Determine whether the adapter needs
+a repository-owned Buck2 configuration/platform change, a compatibility update
+for the supported Buck2 version, or both. Do not add a worker for an empty
+platform. The follow-up is complete only when a fresh, non-cache-hit Execute
+request carries the declared properties, matches the registered worker, and the
+existing remote gate then passes its exact RE and materialization checks.
+
 ### 9. Reassess the long-term integration surface
 
 After the compatibility layer is proven, decide whether ordinary nextest CLI
