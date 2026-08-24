@@ -7,8 +7,10 @@ readme=$root/README.md
 baseline=$root/docs/baseline-and-manifest.md
 roadmap=$root/docs/nextest-buck2-roadmap.md
 follow_up=$root/docs/test-coverage-follow-up.md
+roadmap_follow_ups=$root/docs/roadmap-follow-ups.md
 [ -f "$root/baseline-and-manifest.md" ] && baseline=$root/baseline-and-manifest.md
 [ -f "$root/nextest-buck2-roadmap.md" ] && roadmap=$root/nextest-buck2-roadmap.md
+[ -f "$root/roadmap-follow-ups.md" ] && roadmap_follow_ups=$root/roadmap-follow-ups.md
 
 grep -F '## Canonical invocation' "$readme" >/dev/null
 grep -F '`buck-artifact` is the only supported adapter mode' "$readme" >/dev/null
@@ -73,7 +75,8 @@ legacy_switch=$(printf '%s%s' -- -scenario)
 ! grep -F -- "$legacy_switch" "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'no timeout-specific marker' "$roadmap" >/dev/null
 grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
-grep -F 'Keep the completed JUnit/status boundary stable' "$roadmap" >/dev/null
+grep -F '## Prioritized follow-ups (not yet implemented)' "$roadmap" >/dev/null
+grep -F 'The completed milestones above remain the current-state record' "$roadmap" >/dev/null
 grep -F 'successful dispatch path' "$follow_up" >/dev/null
 grep -F 'no-tests = auto' "$follow_up" >/dev/null
 grep -F 'disabled timeout configuration' "$follow_up" >/dev/null
@@ -93,4 +96,101 @@ grep -F 'relocated/sanitized declared-input scenario is required repository-leve
 ! grep -F 'vendor-specific execution platform' "$readme" "$roadmap"
 ! grep -F 'endpoint defaults' "$readme" "$roadmap"
 ! grep -F 'Start Phase 5 with a bounded reporting' "$roadmap"
+
+# The new sequence is executable documentation: every roadmap anchor resolves,
+# required evidence and boundaries remain explicit, and no follow-up is claimed
+# complete before its future acceptance check exists.
+for anchor in freeze-remote-readiness primary-buck-test-surface generic-artifact-runtime-contract rust-runner real-declared-nextest realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
+    grep -F "roadmap-follow-ups.md#$anchor" "$roadmap" >/dev/null
+    grep -F "<a id=\"$anchor\"></a>" "$roadmap_follow_ups" >/dev/null
+done
+[ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 9 ]
+! grep -Ei '^([0-9]+\.|###).*follow-up.*(complete|implemented)' "$roadmap" >/dev/null
+
+for evidence in 'nextest.bzl:26-77' 'adapter.sh:833-887' 'tools/nextest_artifact.py:20-29, 81-83, 158-175,' '292-377' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md:210-258'; do
+    grep -F "$evidence" "$roadmap_follow_ups" >/dev/null
+done
+for heading in '## Architectural invariants' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement a Rust runner' '## 5. Prove real nextest through the declared production path' '## 6. Support a realistic Buck Rust runtime closure' '## 7. Prove the core nextest value proposition' '## 8. Simplify the compatibility layer and consumer setup' '## 9. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
+    grep -F "$heading" "$roadmap_follow_ups" >/dev/null
+done
+for invariant in 'Buck remains authoritative for build artifacts' 'Nextest remains authoritative for test discovery' 'must not invoke Cargo or rustc' 'No source-tree or arbitrary unmanaged `buck-out` writes' 'Fresh test execution must use Buck' 'Preserve exact nextest JUnit bytes' 'Do not' 'Process-tree cleanup, cancellation, and no-orphan behavior' 'Consumer setup should become simpler'; do
+    grep -F "$invariant" "$roadmap_follow_ups" >/dev/null
+done
+for group in '**next**' '**after the local production path**' '**deferred until evidence requires it**'; do grep -F "$group" "$roadmap_follow_ups" >/dev/null; done
+
+# Generic semantic identity and pre-staging rejection are architectural, while
+# only provider field names and collision-free encoding mechanics are deferred.
+for contract in '(package identity, canonical Buck target label, binary identity)' 'configuration-independent canonical Buck owner label in cell/package/target' 'supported Buck providers' 'minimal explicit wrapper/provider' 'deterministically and reversibly' 'Display name, executable basename, and filesystem' 'exactly one executable' 'duplicate triples' 'duplicate executable association' 'multiple-executable record' 'normalization/encoding collision before staging' 'one executable associated with multiple records' 'multiple executables in one record' 'Only exact supported-provider field names and collision-free encoding mechanics are deferred' 'the sole source of test-case names for execution'; do
+    grep -F "$contract" "$roadmap_follow_ups" >/dev/null
+done
+
+# The existing JUnit build action cannot change status before the complete,
+# operator-approved decision record and evidence gate are present.
+for gate in 'neither removes nor promotes' 'operator-approved decision record' 'owner/approver' 'selected outcome' 'real toolchain' 'statuses remain documented' 'unchanged JUnit bytes and diagnostics' 'cancellation' 'fresh-execution' 'migration/documentation consequences' 'explicit removal or support boundary' 'indefinitely ambiguous'; do
+    grep -F "$gate" "$roadmap_follow_ups" >/dev/null
+done
+
+! grep -F 'Production remains `local_only = True`' "$readme" >/dev/null
+grep -F 'local-preferred (`prefer_local = True`)' "$readme" >/dev/null
+grep -F 'cache upload disabled' "$readme" >/dev/null
+grep -F 'caller-configured supported executor' "$readme" >/dev/null
+grep -F -- '--remote-only' "$readme" >/dev/null
+
+python3 - "$roadmap_follow_ups" "$root/BUCK" "$root/Justfile" "$root" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text()
+buck = Path(sys.argv[2]).read_text()
+just = Path(sys.argv[3]).read_text()
+root_path = Path(sys.argv[4])
+
+required_checks = {
+    "buck2_nextest_real_declared_toolchain",
+    "buck2_nextest_generic_multi_binary",
+    "buck2_nextest_runtime_closure",
+    "buck2_nextest_retry_and_process_isolation",
+    "buck2_nextest_timeout_and_slowness",
+    "buck2_nextest_output_capture",
+    "buck2_nextest_ignored_tests",
+    "buck2_nextest_group_concurrency",
+    "buck2_nextest_cancellation_cleanup",
+    "buck2_nextest_remote_platform_and_materialization",
+}
+feature = text.split("### Feature-to-test matrix", 1)[1].split("**Risks/decision triggers.**", 1)[0]
+rows = [line for line in feature.splitlines() if line.startswith("| ") and "Named future check" not in line and not line.startswith("|---")]
+assert rows, "feature matrix has no rows"
+for row in rows:
+    cells = [cell.strip() for cell in row.strip("|").split("|")]
+    assert len(cells) == 4, f"malformed feature row: {row}"
+    assert cells[2] and ("Fails " in cells[2] or "Fails unless" in cells[2]), f"non-regression-sensitive assertion: {row}"
+    assert cells[3] == "Uses the production Buck test rule and real declared nextest toolchain.", f"missing production constraint: {row}"
+for check in required_checks:
+    assert any(f"`{check}`" in row for row in rows), f"missing future check {check}"
+
+matrix = text.split("## Quick-cleanup assertion matrix", 1)[1].split("## Prioritization", 1)[0]
+rows = [line for line in matrix.splitlines() if line.startswith("| `")]
+expected = {
+    "nextest_buck_artifact_rule_contract.sh": 12,
+    "scenario_removed.sh": 3,
+    "legacy_path_absent.sh": 7,
+}
+for script, count in expected.items():
+    script_rows = [line for line in rows if line.startswith(f"| `{script}` |")]
+    assert len(script_rows) == count, (script, len(script_rows), count)
+    dispositions = {re.findall(r"\| `(retain|delete)` \|", line)[0] for line in script_rows}
+    assert len(dispositions) == 1, f"mixed script disposition: {script}"
+    disposition = dispositions.pop()
+    target = script.removesuffix(".sh")
+    registered = f'name = "{target}"' in buck and f"//:{target}" in just
+    if disposition == "retain":
+        assert registered and (root_path / script).exists(), f"retained candidate missing: {script}"
+    else:
+        assert not registered and not (root_path / script).exists(), f"deleted candidate remains: {script}"
+for policy in "prefer_local = True", "local_only = True", "allow_cache_upload = False":
+    matching = [line for line in rows if f"'{policy}'" in line]
+    assert len(matching) == 1 and "| `retain` |" in matching[0], f"action-policy disposition missing: {policy}"
+PY
+
 printf '%s\n' 'documentation smoke: passed'

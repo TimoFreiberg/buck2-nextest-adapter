@@ -477,16 +477,27 @@ sh_test(
     test = "docs/smoke_documentation.sh",
     resources = [
         "README.md",
+        "BUCK",
+        "Justfile",
         "docs/baseline-and-manifest.md",
         "docs/nextest-buck2-roadmap.md",
+        "docs/roadmap-follow-ups.md",
         "docs/test-coverage-follow-up.md",
+        "legacy_path_absent.sh",
         "nextest_buck_artifact_consumer_inspection.py",
-        "Justfile",
-        "nextest.bzl",
+        "nextest_buck_artifact_junit_local.sh",
         "nextest_buck_artifact_remote.sh",
         "nextest_buck_artifact_remote_selftest.sh",
-        "nextest_buck_artifact_junit_local.sh",
+        "nextest_buck_artifact_rule_contract.sh",
+        "nextest.bzl",
+        "scenario_removed.sh",
     ],
+)
+
+sh_test(
+    name = "repository_hygiene",
+    test = "repository_hygiene.sh",
+    resources = ["repository_hygiene.sh"],
 )
 
 sh_test(

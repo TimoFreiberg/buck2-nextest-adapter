@@ -272,20 +272,19 @@ is sufficient. Possible outcomes are:
 The decision should be based on measured metadata and execution requirements,
 not on the initial Cargo fixture.
 
-## Recommended immediate next step
+## Prioritized follow-ups (not yet implemented)
 
-Keep the completed JUnit/status boundary stable. The declared-tool portability,
-action-key experiment, lifecycle determinism, and Buck-level concurrency checks are
-the immediate hardening surface. The restricted-PATH runtime fixture is now required local CI coverage through the repository-level `adapter_relocated_sanitized` check. Its host prerequisite policy is fail-closed with actionable diagnostics. Process-group signal cleanup and live remote execution remain separate environment-dependent, explicitly opt-in gates and are not implied by this local relocation proof. The cache
-check deliberately reports its execution-observability gap rather than claiming a
-cache hit from identical bytes. The local-preferred action policy and the
-fail-closed `nextest_buck_artifact_remote` gate are now the remote-readiness slice:
-run `just nextest_buck_artifact_remote_selftest` for credential-free control-flow
-coverage, and run `just nextest_buck_artifact_remote` only with a supported
-caller-owned backend/platform. Run `//:nextest_process_group_capability` first;
-the positive signal target is opt-in and must be omitted when `setsid` is
-unavailable. A supported remote backend must independently verify bundle
-materialization, cancellation and descendant teardown, successful and failed
-output retrieval, and cache behavior. Keep retries, groups, persistent records,
-direct embedding, workers/delegation, per-test scheduling, and richer event
-protocols as later phases.
+The completed milestones above remain the current-state record. The following
+course correction is future work, ordered by dependency; detailed rationale,
+boundaries, and acceptance evidence live in
+[`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
+
+1. **[Freeze further remote-readiness expansion temporarily](roadmap-follow-ups.md#freeze-remote-readiness).** Preserve the fail-closed remote gate and platform-propagation blocker, but pause additional RE observability work until the local production path succeeds. This reprioritizes rather than removes Phase 8.
+2. **[Define the primary Buck test surface](roadmap-follow-ups.md#primary-buck-test-surface).** Design a reusable Buck2 test rule/provider so fresh execution belongs to `buck2 test`; do not remove or promote the existing declared JUnit build action before its evidence-backed, operator-approved decision gate.
+3. **[Generalize the artifact/runtime contract](roadmap-follow-ups.md#generic-artifact-runtime-contract).** Replace fixture constants with arbitrary one-or-more binary records whose stable identity is `(package identity, canonical Buck target label, binary identity)`, while Buck supplies the declared runtime closure and nextest discovers test names.
+4. **[Implement a Rust runner](roadmap-follow-ups.md#rust-runner).** After the Buck test surface and generic contract settle, replace shell orchestration with a small runner limited to validation, staging, argv construction, top-level nextest supervision, cancellation/cleanup, and unchanged JUnit export.
+5. **[Prove real nextest through the declared production path](roadmap-follow-ups.md#real-declared-nextest).** Run a real Buck-declared cargo-nextest and its complete fixture/toolchain closure through sanitized, Buck-owned execution with real list/run and byte-identical JUnit.
+6. **[Support a realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Derive shared libraries, generated/build-script outputs, runtime data, environment, platform information, and transitive artifacts from supported providers or a minimal explicit wrapper.
+7. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover process isolation, flaky retry, timeout/slowness, capture, ignored tests, groups/concurrency, cancellation, and a realistic runtime dependency through the production rule and real toolchain.
+8. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Generate supported metadata explicitly and reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
+9. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Once the local generic path is proven, decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, cancellation, failed-result, and cache validation.

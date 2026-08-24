@@ -4,7 +4,7 @@ project_root := justfile_directory()
 buck := env_var_or_default("BUCK2", "buck2")
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: _relocation-preflight _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
+ci: repository_hygiene _relocation-preflight _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
 
 _relocation-preflight:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/adapter_relocated_preflight.sh {{project_root}}
@@ -45,6 +45,7 @@ _buck-ci: _relocation-preflight
         //:nextest_buck_artifact_status_timeout \
         //:nextest_buck_artifact_status_timeout-disabled \
         //:nextest_capability_preflight \
+        //:repository_hygiene \
         //:scenario_removed \
         //:validate_artifact_manifest
 
@@ -75,6 +76,10 @@ nextest_buck_artifact_junit_cache:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{project_root}}/nextest_buck_artifact_junit_cache.sh
 nextest_buck_artifact_junit_concurrent_buck:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{project_root}}/nextest_buck_artifact_junit_concurrent_buck.sh
+
+# Repository hygiene is both a direct CI prerequisite and a registered Buck test.
+repository_hygiene:
+    BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/repository_hygiene.sh
 
 # Run one Buck-backed test by its Buck target name, for example `just nextest_buck_artifact_configured`.
 _buck-test name:
