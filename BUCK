@@ -87,7 +87,7 @@ genrule(
     srcs = ["baseline/normalized/tests.json"],
 )
 
-load(":nextest.bzl", "nextest_buck_artifact_junit", "nextest_executable")
+load(":nextest.bzl", "nextest_buck_artifact_junit", "nextest_buck_test", "nextest_buck_test_binary", "nextest_executable")
 
 sh_binary(
     name = "nextest-cargo-executable",
@@ -136,6 +136,12 @@ rust_test(
     crate_root = "buck2_artifact.rs",
 )
 
+rust_test(
+    name = "buck2_nextest_rust_test_beta",
+    srcs = ["buck2_artifact.rs"],
+    crate_root = "buck2_artifact.rs",
+)
+
 genrule(
     name = "buck2_nextest_artifact_manifest",
     out = "artifact-manifest.json",
@@ -176,6 +182,48 @@ genrule(
 )
 
 sh_binary(
+    name = "nextest_buck_test_contract_runner",
+    main = "tools/nextest_buck_test_contract.py",
+    append_script_extension = False,
+    resources = ["tools/nextest_buck_test_contract.py", "tools/nextest_artifact.py"],
+)
+
+nextest_buck_test_binary(
+    name = "nextest_buck_test_binary_alpha",
+    executable = ":buck2_nextest_rust_test",
+    runtime = [":runtime_resource"],
+    runtime_destinations = ["runtime/alpha.txt"],
+    package_identity = "demo-package",
+    owner_label = "//:demo_tests",
+    binary_identity = "alpha",
+    display_name = "same-display-name",
+    executable_destination = "bin/alpha",
+    cwd = "work/alpha",
+    platform = "local-fixture-v1",
+    environment = {"NEXTEST_CONTRACT": "alpha"},
+)
+
+nextest_buck_test_binary(
+    name = "nextest_buck_test_binary_beta",
+    executable = ":buck2_nextest_rust_test_beta",
+    runtime = [":runtime_resource"],
+    runtime_destinations = ["runtime/beta.txt"],
+    package_identity = "demo-package",
+    owner_label = "//:demo_tests",
+    binary_identity = "beta",
+    display_name = "same-display-name",
+    executable_destination = "bin/beta",
+    cwd = "work/beta",
+    platform = "local-fixture-v1",
+    environment = {"NEXTEST_CONTRACT": "beta"},
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_generic_multi_binary",
+    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta"],
+)
+
+sh_binary(
     name = "nextest_buck_artifact_runner",
     main = "adapter.sh",
     append_script_extension = False,
@@ -184,6 +232,8 @@ sh_binary(
         ":buck2_nextest_artifact_manifest",
         "runtime/buck2_artifact_runtime.txt",
         "tools/nextest_artifact.py",
+        "tools/nextest_buck_test_contract.py",
+        "tools/parse_buck_freshness_events.py",
         "tools/cargo_source_denial.sh",
         "tools/nextest_python_launcher.sh",
         "tools/nextest_cargo_nextest_v1.py",
@@ -192,6 +242,18 @@ sh_binary(
         ":nextest_buck_artifact_action_metadata",
         ":baseline",
     ],
+)
+
+sh_test(
+    name = "test_semantic_contract",
+    test = "tools/test_semantic_contract.py",
+    resources = ["tools/test_semantic_contract.py", "tools/nextest_artifact.py", "tools/nextest_buck_test_contract.py"],
+)
+
+sh_test(
+    name = "buck2_nextest_external_test_surface",
+    test = "tools/test_external_test_surface.py",
+    resources = ["tools/test_external_test_surface.py", "nextest.bzl", "BUCK"],
 )
 
 sh_test(
@@ -490,6 +552,10 @@ sh_test(
         "nextest_buck_artifact_remote_selftest.sh",
         "nextest_buck_artifact_rule_contract.sh",
         "nextest.bzl",
+        "tools/nextest_buck_test_contract.py",
+        "tools/parse_buck_freshness_events.py",
+        "tools/test_external_test_surface.py",
+        "tools/test_semantic_contract.py",
         "scenario_removed.sh",
     ],
 )

@@ -4,6 +4,7 @@ set -eu
 root=${BUCK_DEFAULT_RUNTIME_RESOURCES:-$(dirname "$0")}
 [ -f "$root/README.md" ] || root=$(cd "$(dirname "$0")/.." && pwd)
 readme=$root/README.md
+justfile=$root/Justfile
 baseline=$root/docs/baseline-and-manifest.md
 roadmap=$root/docs/nextest-buck2-roadmap.md
 follow_up=$root/docs/test-coverage-follow-up.md
@@ -37,6 +38,9 @@ grep -F 'nextest_buck_artifact_remote_selftest' "$readme" >/dev/null
 ! grep -F 'local-only' "$readme" "$roadmap" >/dev/null
 grep -F 'BUCK_SCRATCH_PATH' "$readme" "$baseline" >/dev/null
 grep -F 'required default CI coverage: just ci runs adapter_relocated_sanitized' "$readme" >/dev/null
+grep -F 'nextest_buck_test' "$readme" "$baseline" "$justfile" >/dev/null
+grep -F 'ExternalRunnerTestInfo' "$readme" "$baseline" >/dev/null
+grep -F 'b2n1:' "$baseline" >/dev/null
 grep -F 'missing relocation prerequisites fail CI with diagnostics' "$readme" >/dev/null
  grep -F 'repository-level check, not a nested sh_test' "$readme" >/dev/null
  grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null

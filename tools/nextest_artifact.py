@@ -498,6 +498,229 @@ def export_report(args: argparse.Namespace) -> None:
         os.close(directory_fd)
 
 
+GENERIC_SCHEMA_VERSION = 2
+GENERIC_ID_PREFIX = "b2n1:"
+_ID_UNRESERVED = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
+_GENERIC_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z", re.ASCII)
+_GENERIC_OWNER_LABEL = re.compile(r"//(?:[^/\s:]+/)*[^/\s]+(?::[^/\s]+)?\Z", re.ASCII)
+_GENERIC_RESERVED_PATHS = frozenset(ADAPTER_OWNED_PATHS)
+_GENERIC_RESERVED_ENVIRONMENT_NAMES = frozenset(RESERVED_ENVIRONMENT_NAMES)
+
+
+def _generic_percent_encode(value: str) -> str:
+    if not isinstance(value, str):
+        die("semantic identity components must be strings")
+    encoded = []
+    for byte in value.encode("utf-8"):
+        char = chr(byte)
+        if char in _ID_UNRESERVED:
+            encoded.append(char)
+        else:
+            encoded.append("%{:02X}".format(byte))
+    return "".join(encoded)
+
+
+def semantic_id(package_identity: str, owner_label: str, binary_identity: str) -> str:
+    components = (package_identity, owner_label, binary_identity)
+    if any(not isinstance(value, str) or not value for value in components):
+        die("semantic identity components must be non-empty strings")
+    return GENERIC_ID_PREFIX + ";".join(
+        name + "=" + _generic_percent_encode(value)
+        for name, value in zip(("p", "o", "b"), components)
+    )
+
+
+def decode_semantic_id(value: str) -> tuple[str, str, str]:
+    if not isinstance(value, str) or not value.startswith(GENERIC_ID_PREFIX):
+        die("semantic ID has an unsupported version or prefix")
+    body = value[len(GENERIC_ID_PREFIX):]
+    fields = body.split(";")
+    if len(fields) != 3 or [field[:2] for field in fields] != ["p=", "o=", "b="]:
+        die("semantic ID must contain exactly p, o, and b fields")
+    decoded = []
+    for field in fields:
+        encoded = field[2:]
+        if not encoded:
+            die("semantic ID identity components must be non-empty")
+        output = bytearray()
+        index = 0
+        while index < len(encoded):
+            char = encoded[index]
+            if char == "%":
+                if index + 2 >= len(encoded) or not re.fullmatch(r"[0-9A-F]{2}", encoded[index + 1:index + 3]):
+                    die("semantic ID contains an invalid or non-canonical escape")
+                byte = int(encoded[index + 1:index + 3], 16)
+                if chr(byte) in _ID_UNRESERVED:
+                    die("semantic ID percent-encodes an unreserved byte")
+                output.append(byte)
+                index += 3
+            else:
+                if char not in _ID_UNRESERVED or ord(char) > 0x7F:
+                    die("semantic ID contains an unsafe literal byte")
+                output.append(ord(char))
+                index += 1
+        try:
+            decoded.append(output.decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            die(f"semantic ID contains invalid UTF-8: {exc}")
+    result = tuple(decoded)
+    if semantic_id(*result) != value:
+        die("semantic ID is not in canonical form")
+    return result
+
+
+def _generic_safe_relative_path(value: Any, name: str) -> str:
+    expect(value, str, name)
+    if not value or value.startswith("/") or "\\" in value or "\x00" in value:
+        die(f"{name} must be a normalized relative POSIX path")
+    parts = PurePosixPath(value).parts
+    if not parts or any(part in ("", ".", "..") for part in parts):
+        die(f"{name} must be a normalized relative POSIX path")
+    return value
+
+
+def _generic_path_prefix(left: str, right: str) -> bool:
+    return is_prefix(path_parts(left), path_parts(right)) or is_prefix(path_parts(right), path_parts(left))
+
+
+def _generic_validate_environment(value: Any, name: str) -> dict[str, str]:
+    if not isinstance(value, dict):
+        die(f"{name} must be an object")
+    result = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or _GENERIC_ENVIRONMENT_NAME.fullmatch(key) is None:
+            die(f"{name} contains an invalid environment name")
+        if key in _GENERIC_RESERVED_ENVIRONMENT_NAMES or key.startswith("BUCK2_NEXTEST_"):
+            die(f"{name} contains an adapter-owned environment name: {key}")
+        if not isinstance(item, str) or "\x00" in item:
+            die(f"{name}.{key} must be a NUL-free string")
+        if item.startswith("/") or any(part in ("", ".", "..") for part in PurePosixPath(item).parts if "/" in item):
+            die(f"{name}.{key} must not contain an unsafe path-like value")
+        result[key] = item
+    return result
+
+
+def validate_generic_manifest(path: Path) -> dict[str, Any]:
+    data = expect(strict_load(path), dict, "generic manifest")
+    if set(data) != {"schema_version", "records"} or data["schema_version"] != GENERIC_SCHEMA_VERSION:
+        die("generic manifest must have schema_version 2 and records")
+    records = expect(data["records"], list, "generic manifest.records")
+    if not records:
+        die("generic manifest.records must not be empty")
+    identities = set()
+    executable_sources = set()
+    destinations = {}
+    normalized = []
+    for index, record in enumerate(records):
+        prefix = f"records[{index}]"
+        if not isinstance(record, dict):
+            die(f"{prefix} must be an object")
+        required = {"package_identity", "owner_label", "binary_identity", "display_name", "target_kind", "executable", "runtime", "generated_outputs", "cwd", "platform", "environment"}
+        if set(record) != required:
+            die(f"{prefix} fields must be exactly {sorted(required)}")
+        package = expect(record["package_identity"], str, f"{prefix}.package_identity")
+        owner = expect(record["owner_label"], str, f"{prefix}.owner_label")
+        binary = expect(record["binary_identity"], str, f"{prefix}.binary_identity")
+        display = expect(record["display_name"], str, f"{prefix}.display_name")
+        kind = expect(record["target_kind"], str, f"{prefix}.target_kind")
+        if not package or not owner or not binary or not display or not kind:
+            die(f"{prefix} identity and display fields must be non-empty")
+        if _GENERIC_OWNER_LABEL.fullmatch(owner) is None:
+            die(f"{prefix}.owner_label must be a canonical Buck label")
+        identity = (package, owner, binary)
+        if identity in identities:
+            die(f"duplicate semantic identity: {identity}")
+        identities.add(identity)
+        generated_id = semantic_id(*identity)
+        executable = expect(record["executable"], dict, f"{prefix}.executable")
+        if set(executable) != {"source", "destination", "kind"}:
+            die(f"{prefix}.executable fields are invalid")
+        source = _generic_safe_relative_path(executable["source"], f"{prefix}.executable.source")
+        destination = _generic_safe_relative_path(executable["destination"], f"{prefix}.executable.destination")
+        if executable["kind"] != "regular_file":
+            die(f"{prefix}.executable must be a regular_file")
+        if source in executable_sources:
+            die(f"executable is attached to more than one record: {source}")
+        executable_sources.add(source)
+        paths = [(destination, f"{prefix}.executable.destination")]
+        runtime = expect(record["runtime"], list, f"{prefix}.runtime")
+        runtime_records = []
+        for runtime_index, item in enumerate(runtime):
+            item_name = f"{prefix}.runtime[{runtime_index}]"
+            item = expect(item, dict, item_name)
+            if set(item) != {"source", "destination", "kind"}:
+                die(f"{item_name} fields are invalid")
+            item_source = _generic_safe_relative_path(item["source"], f"{item_name}.source")
+            item_destination = _generic_safe_relative_path(item["destination"], f"{item_name}.destination")
+            if item["kind"] != "regular_file":
+                die(f"{item_name} must be a regular_file; symlinks and trees are unsupported")
+            if item_source in executable_sources:
+                die(f"runtime source is also an executable: {item_source}")
+            runtime_records.append({"source": item_source, "destination": item_destination, "kind": item["kind"]})
+            paths.append((item_destination, item_name + ".destination"))
+        generated = expect(record["generated_outputs"], list, f"{prefix}.generated_outputs")
+        if generated:
+            die(f"{prefix}.generated_outputs are unsupported until their timing is proven")
+        cwd = _generic_safe_relative_path(record["cwd"], f"{prefix}.cwd")
+        paths.append((cwd, f"{prefix}.cwd"))
+        for left_index, (left, left_name) in enumerate(paths):
+            if left in destinations:
+                die(f"duplicate destination {left}: {left_name} and {destinations[left]}")
+            destinations[left] = left_name
+            if left in _GENERIC_RESERVED_PATHS or _generic_path_prefix(left, "manifest.json"):
+                die(f"{left_name} conflicts with an adapter-owned path: {left}")
+            for right, right_name in paths[:left_index]:
+                if _generic_path_prefix(left, right):
+                    die(f"path-prefix overlap between {left_name} and {right_name}")
+        platform_identity = expect(record["platform"], str, f"{prefix}.platform")
+        if not platform_identity or "\x00" in platform_identity or any(char.isspace() for char in platform_identity):
+            die(f"{prefix}.platform must be a non-empty opaque identity without whitespace")
+        environment = _generic_validate_environment(record["environment"], f"{prefix}.environment")
+        normalized.append({
+            "package_identity": package,
+            "owner_label": owner,
+            "binary_identity": binary,
+            "display_name": display,
+            "target_kind": kind,
+            "id": generated_id,
+            "executable": {"source": source, "destination": destination, "kind": executable["kind"]},
+            "runtime": runtime_records,
+            "generated_outputs": [],
+            "cwd": cwd,
+            "platform": platform_identity,
+            "environment": environment,
+        })
+    return {"schema_version": GENERIC_SCHEMA_VERSION, "records": normalized}
+
+
+def generic_metadata(records: list[dict[str, Any]], workspace: Path, target: Path) -> dict[str, Any]:
+    packages = {}
+    suites = {}
+    for record in records:
+        package_id = semantic_id(record["package_identity"], record["owner_label"], "package")
+        binary_id = record["id"]
+        packages.setdefault(package_id, {"id": package_id, "name": record["package_identity"], "target_kind": record["target_kind"]})
+        suites[binary_id] = {
+            "binary-id": binary_id,
+            "binary-name": record["display_name"],
+            "binary-path": str(workspace / record["executable"]["destination"]),
+            "build-platform": record["platform"],
+            "cwd": str(workspace / record["cwd"]),
+            "kind": record["target_kind"],
+            "package-id": package_id,
+            "package-name": record["package_identity"],
+            "status": "listed",
+            "testcases": {},
+        }
+    build_meta = {"target-directory": str(target), "platforms": {}}
+    return {"schema_version": GENERIC_SCHEMA_VERSION, "packages": list(packages.values()), "binaries": suites, "tests": {"rust-build-meta": build_meta, "rust-suites": suites, "test-count": 0}}
+
+
+def emit_generic_metadata(args: argparse.Namespace) -> None:
+    manifest = validate_generic_manifest(Path(args.manifest))
+    write_json(Path(args.output), generic_metadata(manifest["records"], Path(args.workspace).resolve(), Path(args.target).resolve()))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -524,6 +747,15 @@ def main() -> None:
     p.add_argument("--manifest", required=True)
     p.add_argument("--manifest-root", required=True)
     p.set_defaults(func=synthetic_metadata)
+    p = sub.add_parser("emit-generic-metadata")
+    p.add_argument("--manifest", required=True)
+    p.add_argument("--workspace", required=True)
+    p.add_argument("--target", required=True)
+    p.add_argument("--output", required=True)
+    p.set_defaults(func=emit_generic_metadata)
+    p = sub.add_parser("decode-semantic-id")
+    p.add_argument("value")
+    p.set_defaults(func=lambda args: print(json.dumps(decode_semantic_id(args.value), ensure_ascii=False)))
     p = sub.add_parser("normalize-baseline")
     p.add_argument("--raw-dir", required=True)
     p.add_argument("--output-dir", required=True)

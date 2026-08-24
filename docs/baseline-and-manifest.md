@@ -75,6 +75,14 @@ If required verification/export fails after dispatch, the adapter returns `3`, p
 
 Process interruption, abort, and cancellation have no stable adapter classification in this milestone. Process-group cleanup coverage requires `setsid`; on this macOS host its absence is reported as a prerequisite blocker rather than claimed as coverage.
 
+## Generic provider contract (schema v2)
+
+The production `nextest_buck_test` rule consumes one `NextestBuckTestBinaryInfo` provider per binary. The provider owns exactly one executable association and its explicitly declared regular-file runtime closure; a target may consume multiple providers. Buck-derived test-action cwd/environment are represented by `ExternalRunnerTestInfo` where the pinned API provides stable semantics. The wrapper supplies only package identity, canonical owner label, binary identity/display name, explicit executable/closure destinations, opaque platform identity, and literal record environment.
+
+Semantic uniqueness is `(package identity, canonical owner label, binary identity)`. Generated IDs are reversible `b2n1:p=<encoded>;o=<encoded>;b=<encoded>` values. Encoding preserves UTF-8 bytes, leaves only unreserved ASCII readable, and uses uppercase percent escapes for every other byte. The decoder rejects unsupported versions, empty identities, malformed/lowercase/non-canonical escapes, invalid UTF-8, duplicate fields, and trailing data. Validation rejects symlinks/trees, unsafe or overlapping destinations, duplicate executable associations, undeclared/generated outputs, adapter-owned paths/environment names, and missing identity/platform data before dispatch.
+
+The checked-in `tools/nextest_buck_test_records.json` and `tools/test_semantic_contract.py` fixtures prove same-display and multi-binary behavior. They are contract fixtures, not a checked-in test-case list and not a substitute for nextest discovery. The pinned Buck target currently emits contract markers and defers real nextest dispatch until the runner milestone.
+
 ## Deferred scope
 
 Retries, groups, generated outputs beyond the current empty contract, shared libraries, direct embedding, native provider promotion, richer event protocols, cache behavior, cancellation/descendant teardown, failed-output retrieval, per-test delegation, and stable abort/cancel mapping remain later work. The remote gate does not attest worker-side execution or rule out RE-service deduplication. Required default CI coverage: `just ci` runs `adapter_relocated_sanitized` as a repository-level check, not a nested `sh_test`. Missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch; the check's additional Buck build/execution cost does not change `adapter.sh` product/runtime behavior. Process-group and live-remote checks remain separately opt-in.

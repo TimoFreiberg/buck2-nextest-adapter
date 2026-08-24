@@ -13,6 +13,16 @@ No toolchain provisioning is included. Consumers provide Cargo, Python, and the 
 
 ## Canonical invocation
 
+`buck-artifact` remains the only supported adapter mode. The first reusable Buck test surface is `nextest_buck_test`, backed by the pinned Buck2 `ExternalRunnerTestInfo` API:
+
+```text
+nextest_buck_test_binary (one declared executable + explicit regular-file closure)
+  -> nextest_buck_test (one top-level Buck suite, one ExternalRunnerTestInfo command)
+  -> future adapter/nextest dispatch
+```
+
+The current milestone validates this ownership boundary and generic metadata contract; it does not yet rewrite the shell runner or claim real cargo-nextest dispatch from the new rule.
+
 `buck-artifact` is the only supported adapter mode:
 
 required default CI coverage: just ci runs adapter_relocated_sanitized. repository-level check, not a nested sh_test. missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch. The check rebuilds the four Buck outputs and hands them to the adapter from a relocated working directory. `just ci` incurs the check's additional Buck build/execution cost; `adapter.sh` product/runtime behavior is unchanged. The supported local host boundary is POSIX with the named relocation utilities, an ambient build-time `python3`, and the fixed `/usr/bin/python3` launcher interpreter. Process-group and live-remote checks remain explicitly opt-in capability gates.

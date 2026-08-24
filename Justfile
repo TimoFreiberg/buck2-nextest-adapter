@@ -12,6 +12,9 @@ _relocation-preflight:
 # Run the Buck-backed test suite from the repository shell.
 _buck-ci: _relocation-preflight
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{buck}} test --test-executor-stdout=- --test-executor-stderr=- \
+        //:buck2_nextest_external_test_surface \
+        //:nextest_buck_test_generic_multi_binary \
+        //:test_semantic_contract \
         //:adapter_mode_validation \
         //:adapter_process_group_validation \
         //:adapter_signal_cleanup \
@@ -149,6 +152,10 @@ documentation_smoke:
     just _buck-test documentation_smoke
 legacy_path_absent:
     just _buck-test legacy_path_absent
+nextest_buck_test_generic_multi_binary:
+    just _buck-test nextest_buck_test_generic_multi_binary
+buck2_nextest_external_test_surface:
+    just _buck-test buck2_nextest_external_test_surface
 nextest_buck_artifact:
     just _buck-test nextest_buck_artifact
 nextest_buck_artifact_concurrent:
