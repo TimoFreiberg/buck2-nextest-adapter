@@ -30,12 +30,12 @@ These constraints apply to every follow-up:
 - Consumer setup should become simpler even when that requires somewhat more
   complexity inside this project.
 
-Current evidence for the course correction includes the build-output rule in
-`nextest.bzl:26-77`, the shell dispatch matrix in `adapter.sh:833-887`, fixture
-constants and staging in `tools/nextest_artifact.py:20-29, 81-83, 158-175,
-292-377`, the recorder toolchain fixture in
-`tools/nextest_cargo_nextest_v1.py:28-56`, and the mismatch between the current
-Phase 7 and Phase 8 state in `docs/nextest-buck2-roadmap.md:210-258`.
+Current implementation evidence includes the build-output rule in
+`nextest.bzl:206-272`, the Rust dispatch/lifecycle implementation in
+`adapter/src/bin/nextest_buck_artifact.rs`, shared schema/staging logic in
+`adapter/src/manifest_v1.rs` and `adapter/src/manifest_v2.rs`, the recorder
+fixture in `tools/nextest_cargo_nextest_v1.py:28-56`, and the roadmap state in
+`docs/nextest-buck2-roadmap.md`.
 
 <a id="freeze-remote-readiness"></a>
 ## 1. Freeze further remote-readiness expansion temporarily
@@ -105,8 +105,8 @@ passes and before changing the old action's status.
 <a id="generic-artifact-runtime-contract"></a>
 ## 3. Generalize the artifact/runtime contract
 
-**Purpose and evidence.** `tools/nextest_artifact.py:20-29, 81-83, 158-175,
-292-377` encodes fixture-specific metadata and staging. A reusable rule needs
+**Purpose and evidence.** `adapter/src/manifest_v1.rs` and the Rust runner encode
+validated metadata and declared staging. A reusable rule needs
 arbitrary one-or-more test-binary records supplied by supported Buck providers
 or a minimal explicit wrapper/provider.
 
@@ -144,8 +144,8 @@ collision analysis, not ad hoc normalization.
 <a id="rust-runner"></a>
 ## 4. Implement a Rust runner
 
-**Purpose and evidence.** `adapter.sh:833-887` is part of a roughly 937-line
-shell orchestrator with expanding dispatch and supervision concerns. Rewriting
+**Purpose and evidence.** `adapter/src/bin/nextest_buck_artifact.rs` owns the
+strict declared-input dispatch and supervision boundary. Rewriting
 before interfaces settle would preserve accidental compatibility branches.
 
 **Desired end state.** A small compiled runner parses and validates the declared
@@ -177,10 +177,9 @@ which shell seams survive.
 <a id="real-declared-nextest"></a>
 ## 5. Prove real nextest through the declared production path
 
-**Purpose and evidence.** Direct mode proves real nextest, but the declared
-build/toolchain path uses the recorder in
-`tools/nextest_cargo_nextest_v1.py:28-56`. This leaves hermetic declaration and
-real execution proven on different paths.
+**Purpose and evidence.** The declared build/toolchain path uses the recorder in
+`tools/nextest_cargo_nextest_v1.py:28-56`; the Rust runner now drives that same
+strict launcher contract with sanitized environment and Buck scratch.
 
 **Desired end state.** Run an actual Buck-declared cargo-nextest executable with
 the complete closure of the currently declared fixture/toolchain inputs, a
@@ -291,9 +290,8 @@ and consolidate product seams only where behavioral tests replace them.
 **Implementation boundaries.** Reassess Cargo/Python inputs, mandatory bundle
 resources, digests, baseline mutation, and fault injection separately. Do not
 remove current behavior merely because there are no users. In particular,
-`BUCK2_NEXTEST_TEST_EXECUTOR` is consumed by the sentinel branch in
-`adapter.sh:862-864`; removing or renaming it requires behavior-preserving
-redesign and regression coverage, not a quick source cleanup.
+The former executor sentinel is intentionally removed from the Rust runtime;
+process-group and status behavior are covered by native lifecycle tests instead.
 
 **Dependencies/order.** Simplify after the production surface and generic
 contract expose which compatibility pieces remain necessary. Retire

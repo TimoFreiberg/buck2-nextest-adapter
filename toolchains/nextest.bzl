@@ -4,8 +4,6 @@ NextestBuckBundleResourceInfo = provider(
 
 NextestBuckToolchainInfo = provider(
     fields = [
-        "cargo",
-        "python",
         "cargo_nextest",
         "bundle_version",
         "bundle_resources",
@@ -187,8 +185,6 @@ def _nextest_toolchain_impl(ctx):
     return [
         DefaultInfo(),
         NextestBuckToolchainInfo(
-            cargo = ctx.attrs.cargo[RunInfo],
-            python = ctx.attrs.python[RunInfo],
             cargo_nextest = ctx.attrs.cargo_nextest[RunInfo],
             bundle_version = 1,
             bundle_resources = resources,
@@ -202,8 +198,6 @@ nextest_toolchain = rule(
     impl = _nextest_toolchain_impl,
     is_toolchain_rule = True,
     attrs = {
-        "cargo": attrs.exec_dep(providers = [RunInfo]),
-        "python": attrs.exec_dep(providers = [RunInfo]),
         "cargo_nextest": attrs.exec_dep(providers = [RunInfo]),
         "bundle_resources": attrs.list(attrs.exec_dep(providers = [NextestBuckBundleResourceInfo])),
         "bundle_environment": attrs.list(attrs.list(attrs.string()), default = []),

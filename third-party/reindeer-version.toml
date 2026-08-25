@@ -1,0 +1,4 @@
+revision = "efe17c7bb0b547ed07d48111ebcbeea5fa42a904"
+repository = "https://github.com/facebookincubator/reindeer"
+regeneration = "cd third-party && reindeer --manifest-path Cargo.toml --third-party-dir . buckify"
+install = "cargo install --git https://github.com/facebookincubator/reindeer --rev efe17c7bb0b547ed07d48111ebcbeea5fa42a904 reindeer"

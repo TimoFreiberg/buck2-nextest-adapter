@@ -16,7 +16,7 @@ configured = {
 
 assert 'metadata_env_var = "BUCK2_NEXTEST_ACTION_METADATA"' in Path(project, "nextest.bzl").read_text()
 assert 'metadata_path = "nextest-action-metadata.json"' in Path(project, "nextest.bzl").read_text()
-assert "action_metadata_parser" in Path(project, "nextest.bzl").read_text()
+assert "action_metadata_parser" not in Path(project, "nextest.bzl").read_text()
 assert "attrs.exec_dep" in Path(project, "toolchains", "nextest.bzl").read_text()
 toolchain_impl = Path(project, "toolchains", "nextest.bzl").read_text()
 assert "providers = [DefaultInfo, RunInfo]" in toolchain_impl
@@ -60,12 +60,10 @@ for target_key, action in actions.items():
         "--no-tests",
         "--report-skipped",
         "--timeout-seconds",
-        "--cargo-argv",
-        "--python-argv",
         "--cargo-nextest-argv",
+        "--runtime-resource",
         "--bundle-json",
         "--bundle-resources",
-        "--action-metadata-parser",
     ):
         assert pair in command, (pair, command)
     cargo_nextest_index = command.index("--cargo-nextest-argv")
@@ -74,8 +72,7 @@ for target_key, action in actions.items():
         assert "nextest-cargo-nextest-v2" in command[cargo_nextest_index + 1], command
     else:
         assert "nextest-cargo-nextest-v1" in command[cargo_nextest_index + 1], command
-    assert command[cargo_nextest_index + 2] == "nextest", command
-    assert command[cargo_nextest_index + 3] == "--end-argv", command
+    assert command[cargo_nextest_index + 2] == "--end-argv", command
     bundle_index = command.index("--bundle-json")
     bundle_text = action["cmd"].split("--bundle-json, ", 1)[1].split(", --bundle-resources", 1)[0]
     bundle = json.loads(bundle_text.replace('\\"', '"'))
@@ -89,9 +86,10 @@ for target_key, action in actions.items():
     assert command[bundle_index + 2] == "--bundle-resources", command
     assert "nextest-bundle-runtime-resource" in command[bundle_index + 3], command
     assert command[bundle_index + 4] == "--end-bundle-resources", command
-    parser_index = command.index("--action-metadata-parser")
-    assert parser_index + 1 < len(command), command
-    assert "nextest_buck_artifact_action_metadata" in command[parser_index + 1], command
+    assert "--validator" not in command, command
+    assert "--cargo-argv" not in command, command
+    assert "--python-argv" not in command, command
+    assert "--source-denial" not in command, command
     profile = command[command.index("--profile") + 1]
     filter_value = command[command.index("--filter") + 1]
     assert (profile, filter_value) == expected_targets[target], (target, command)

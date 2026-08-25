@@ -1,0 +1,40 @@
+rust_library(
+    name = "nextest-buck-adapter-contract",
+    visibility = ["PUBLIC"],
+    srcs = glob(["src/**/*.rs"]),
+    crate = "buck2_nextest_adapter_contract",
+    crate_root = "src/lib.rs",
+    deps = [
+        "//third-party:quick-xml",
+        "//third-party:rustix",
+        "//third-party:serde",
+        "//third-party:serde_json",
+        "//third-party:sha2",
+        "//third-party:signal-hook",
+        "//third-party:tempfile",
+    ],
+)
+
+rust_binary(
+    name = "nextest-buck-artifact",
+    visibility = ["PUBLIC"],
+    srcs = ["src/bin/nextest_buck_artifact.rs"],
+    crate_root = "src/bin/nextest_buck_artifact.rs",
+    deps = [
+        ":nextest-buck-adapter-contract",
+        "//third-party:rustix",
+        "//third-party:serde_json",
+        "//third-party:signal-hook",
+    ],
+)
+
+rust_binary(
+    name = "nextest-buck-test-contract",
+    visibility = ["PUBLIC"],
+    srcs = ["src/bin/nextest_buck_test_contract.rs"],
+    crate_root = "src/bin/nextest_buck_test_contract.rs",
+    deps = [
+        ":nextest-buck-adapter-contract",
+        "//third-party:serde_json",
+    ],
+)

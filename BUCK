@@ -3,37 +3,16 @@ filegroup(
     srcs = ["fixture/Cargo.toml"],
 )
 
-filegroup(
-    name = "tools",
-    srcs = ["tools/nextest_artifact.py", "tools/cargo_source_denial.sh"],
-    copy = False,
+alias(
+    name = "nextest_buck_artifact_runner",
+    actual = "//adapter:nextest-buck-artifact",
+    visibility = ["PUBLIC"],
 )
 
-filegroup(
-    name = "validator",
-    srcs = ["tools/nextest_artifact.py"],
-    copy = False,
-)
-
-genrule(
-    name = "validator_file",
-    out = "nextest_artifact.py",
-    cmd = "cp tools/nextest_artifact.py $OUT",
-    srcs = ["tools/nextest_artifact.py"],
-)
-
-genrule(
-    name = "source_denial",
-    out = "cargo_source_denial.sh",
-    cmd = "cp tools/cargo_source_denial.sh $OUT && chmod +x $OUT",
-    srcs = ["tools/cargo_source_denial.sh"],
-)
-
-genrule(
-    name = "nextest_buck_artifact_action_metadata",
-    out = "nextest_buck_artifact_action_metadata.py",
-    cmd = "cp tools/nextest_buck_artifact_action_metadata.py $OUT && chmod +x $OUT",
-    srcs = ["tools/nextest_buck_artifact_action_metadata.py"],
+alias(
+    name = "nextest_buck_test_contract_runner",
+    actual = "//adapter:nextest-buck-test-contract",
+    visibility = ["PUBLIC"],
 )
 
 filegroup(
@@ -89,20 +68,6 @@ genrule(
 
 load(":nextest.bzl", "nextest_buck_artifact_junit", "nextest_buck_test", "nextest_buck_test_binary", "nextest_executable")
 
-sh_binary(
-    name = "nextest-cargo-executable",
-    visibility = ["PUBLIC"],
-    main = "tools/cargo_source_denial.sh",
-    append_script_extension = False,
-)
-
-nextest_executable(
-    name = "nextest-python-executable",
-    visibility = ["PUBLIC"],
-    source = "tools/nextest_python_launcher.sh",
-    out = "nextest-python-executable",
-)
-
 nextest_executable(
     name = "nextest-cargo-nextest-v1-executable",
     visibility = ["PUBLIC"],
@@ -110,18 +75,17 @@ nextest_executable(
     out = "nextest-cargo-nextest-v1-executable",
 )
 
-sh_binary(
+nextest_executable(
     name = "nextest-cargo-nextest-v2-executable",
     visibility = ["PUBLIC"],
-    main = "tools/nextest_cargo_nextest_v2.py",
-    append_script_extension = False,
+    source = "tools/nextest_cargo_nextest_v2.py",
+    out = "nextest-cargo-nextest-v2-executable",
 )
 
-sh_binary(
+nextest_executable(
     name = "nextest_buck_artifact_junit_signal_fixture",
-    main = "tools/nextest_buck_artifact_junit_signal_fixture.py",
-    append_script_extension = False,
-    resources = ["tools/nextest_buck_artifact_junit_signal_fixture.py"],
+    source = "tools/nextest_buck_artifact_junit_signal_fixture.py",
+    out = "nextest-buck-artifact-junit-signal-fixture",
 )
 
 filegroup(
@@ -145,8 +109,8 @@ rust_test(
 genrule(
     name = "buck2_nextest_artifact_manifest",
     out = "artifact-manifest.json",
-    cmd = "python3 $(source tools/nextest_artifact.py) emit-manifest --artifact $(location :buck2_nextest_rust_test) --runtime-input runtime/buck2_artifact_runtime.txt --runtime-source $(source runtime/buck2_artifact_runtime.txt) --output $OUT",
-    srcs = ["tools/nextest_artifact.py", ":buck2_nextest_rust_test", "runtime/buck2_artifact_runtime.txt"],
+    cmd = "$(location :nextest_buck_artifact_runner) emit-manifest --artifact $(location :buck2_nextest_rust_test) --runtime-input runtime/buck2_artifact_runtime.txt --runtime-source $(source runtime/buck2_artifact_runtime.txt) --output $OUT",
+    srcs = [":buck2_nextest_rust_test", "runtime/buck2_artifact_runtime.txt", ":nextest_buck_artifact_runner"],
 )
 
 nextest_buck_artifact_junit(
@@ -179,13 +143,6 @@ genrule(
     out = "nextest-buck-artifact-junit-expected-failure-copy.txt",
     cmd = "cp $(location :nextest_buck_artifact_junit_expected_failure) $OUT",
     srcs = [":nextest_buck_artifact_junit_expected_failure"],
-)
-
-sh_binary(
-    name = "nextest_buck_test_contract_runner",
-    main = "tools/nextest_buck_test_contract.py",
-    append_script_extension = False,
-    resources = ["tools/nextest_buck_test_contract.py", "tools/nextest_artifact.py"],
 )
 
 nextest_buck_test_binary(
@@ -223,31 +180,20 @@ nextest_buck_test(
     records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta"],
 )
 
-sh_binary(
-    name = "nextest_buck_artifact_runner",
-    main = "adapter.sh",
-    append_script_extension = False,
-    resources = [
-        ":buck2_nextest_rust_test",
-        ":buck2_nextest_artifact_manifest",
-        "runtime/buck2_artifact_runtime.txt",
-        "tools/nextest_artifact.py",
-        "tools/nextest_buck_test_contract.py",
-        "tools/parse_buck_freshness_events.py",
-        "tools/cargo_source_denial.sh",
-        "tools/nextest_python_launcher.sh",
-        "tools/nextest_cargo_nextest_v1.py",
-        "tools/nextest_cargo_nextest_v2.py",
-        "tools/nextest_buck_artifact_action_metadata.py",
-        ":nextest_buck_artifact_action_metadata",
-        ":baseline",
-    ],
-)
-
 sh_test(
     name = "test_semantic_contract",
-    test = "tools/test_semantic_contract.py",
-    resources = ["tools/test_semantic_contract.py", "tools/nextest_artifact.py", "tools/nextest_buck_test_contract.py"],
+    test = "tools/test_semantic_contract_rust.sh",
+    args = [
+        "$(location :nextest_buck_test_contract_runner)",
+        "$(location :nextest_buck_test_binary_alpha)",
+        "$(location :nextest_buck_test_binary_beta)",
+    ],
+    resources = [
+        "tools/test_semantic_contract_rust.sh",
+        ":nextest_buck_test_contract_runner",
+        ":nextest_buck_test_binary_alpha",
+        ":nextest_buck_test_binary_beta",
+    ],
 )
 
 sh_test(
@@ -415,12 +361,8 @@ sh_test(
     ],
     resources = [
         ":nextest_buck_artifact_runner",
-        "adapter.sh",
         "adapter_bundle_validation.sh",
         "runtime/buck2_artifact_runtime.txt",
-        "tools/cargo_source_denial.sh",
-        "tools/nextest_buck_artifact_action_metadata.py",
-        "nextest_test_recorder.py",
     ],
 )
 
@@ -453,8 +395,6 @@ sh_test(
         ":nextest_buck_artifact_runner",
         "adapter_process_group_validation.sh",
         "runtime/buck2_artifact_runtime.txt",
-        "tools/cargo_source_denial.sh",
-        "nextest_test_recorder.py",
     ],
 )
 
@@ -490,9 +430,7 @@ sh_test(
     ],
     resources = [
         "nextest_buck_artifact_configured.sh",
-        "nextest_test_recorder.py",
         "runtime/buck2_artifact_runtime.txt",
-        "tools/cargo_source_denial.sh",
         ":nextest_buck_artifact_runner",
     ],
 )
@@ -510,9 +448,7 @@ sh_test(
     ],
     resources = [
         "nextest_buck_artifact_concurrent.sh",
-        "nextest_test_recorder.py",
         "runtime/buck2_artifact_runtime.txt",
-        "tools/cargo_source_denial.sh",
         ":nextest_buck_artifact_runner",
     ],
 )
@@ -520,14 +456,13 @@ sh_test(
 sh_test(
     name = "scenario_removed",
     test = "scenario_removed.sh",
-    resources = ["scenario_removed.sh", "adapter.sh", "README.md", "BUCK"],
+    resources = ["scenario_removed.sh", "README.md", "BUCK"],
 )
 
 sh_test(
     name = "legacy_path_absent",
     test = "legacy_path_absent.sh",
     resources = [
-        "adapter.sh",
         "BUCK",
         "fixture/Cargo.toml",
         "tools/capture_cargo_nextest_baseline.sh",
@@ -552,7 +487,6 @@ sh_test(
         "nextest_buck_artifact_remote_selftest.sh",
         "nextest_buck_artifact_rule_contract.sh",
         "nextest.bzl",
-        "tools/nextest_buck_test_contract.py",
         "tools/parse_buck_freshness_events.py",
         "tools/test_external_test_surface.py",
         "tools/test_semantic_contract.py",
@@ -617,17 +551,14 @@ sh_test(
     name = "nextest_buck_artifact_junit_signal",
     test = "nextest_buck_artifact_junit_signal.sh",
     args = [
+        "$(location :nextest_buck_artifact_runner)",
         "$(location :nextest_buck_artifact_junit_signal_fixture)",
         "$(location :buck2_nextest_rust_test)",
         "$(location :buck2_nextest_artifact_manifest)",
-        "$(source tools/nextest_artifact.py)",
         "$(source baseline/normalized/cargo-metadata.json)",
         "$(source baseline/normalized/binaries.json)",
         "$(source baseline/normalized/tests.json)",
         "$(source runtime/buck2_artifact_runtime.txt)",
-        "$(source tools/cargo_source_denial.sh)",
-        "$(source tools/nextest_buck_artifact_action_metadata.py)",
-        "$(location :nextest-python-executable)",
     ],
-    resources = ["nextest_buck_artifact_junit_signal.sh", ":nextest_buck_artifact_junit_signal_fixture", "tools/nextest_artifact.py", "tools/cargo_source_denial.sh", "tools/nextest_buck_artifact_action_metadata.py", "tools/nextest_cargo_nextest_v1.py", "runtime/buck2_artifact_runtime.txt", ":baseline", ":buck2_nextest_artifact_manifest"],
+    resources = ["nextest_buck_artifact_junit_signal.sh", ":nextest_buck_artifact_junit_signal_fixture", ":nextest_buck_artifact_runner", "tools/nextest_cargo_nextest_v1.py", "runtime/buck2_artifact_runtime.txt", ":baseline", ":buck2_nextest_artifact_manifest"],
 )

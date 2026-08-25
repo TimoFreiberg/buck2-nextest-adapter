@@ -84,6 +84,11 @@ nextest_buck_artifact_junit_concurrent_buck:
 repository_hygiene:
     BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/repository_hygiene.sh
 
+# Verify the third-party dependency graph (Cargo.lock, generated BUCK, pinned
+# reindeer metadata, auditable dependency note) on its own.
+third_party_dependency_integrity:
+    python3 {{project_root}}/third-party/check_dependencies.py check {{project_root}}/third-party
+
 # Run one Buck-backed test by its Buck target name, for example `just nextest_buck_artifact_configured`.
 _buck-test name:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{buck}} test --test-executor-stdout=- --test-executor-stderr=- "//:{{name}}"
@@ -111,6 +116,7 @@ _ci-nextest_buck_artifact_junit_concurrent_buck: _relocation-preflight
     just nextest_buck_artifact_junit_concurrent_buck
 _ci-adapter_relocated_sanitized: _relocation-preflight
     just adapter_relocated_sanitized
+    BUCK_PROJECT_ROOT={{project_root}} BUCK2={{buck}} sh {{project_root}}/adapter_relocated_path_derivation_test.sh
 
 # These portability harnesses remain repository-level checks because this Buck
 # executor does not surface their diagnostics reliably through sh_test.
@@ -120,10 +126,10 @@ adapter_relocated_sanitized:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/adapter_relocated_preflight.sh {{project_root}} && \
     artifact=$({{buck}} build --show-output //:buck2_nextest_rust_test | tail -1 | cut -d' ' -f2) && \
     manifest=$({{buck}} build --show-output //:buck2_nextest_artifact_manifest | tail -1 | cut -d' ' -f2) && \
-    python=$({{buck}} build --show-output //:nextest-python-executable | tail -1 | cut -d' ' -f2) && \
+    runner=$({{buck}} build --show-output //:nextest_buck_artifact_runner | tail -1 | cut -d' ' -f2) && \
     nextest=$({{buck}} build --show-output //:nextest-cargo-nextest-v1-executable | tail -1 | cut -d' ' -f2) && \
-    ADAPTER_RELOCATED_ARTIFACT_BUCK_OUTPUT_PATH="$artifact" ADAPTER_RELOCATED_MANIFEST_BUCK_OUTPUT_PATH="$manifest" ADAPTER_RELOCATED_PYTHON_BUCK_OUTPUT_PATH="$python" ADAPTER_RELOCATED_NEXTEST_BUCK_OUTPUT_PATH="$nextest" \
-    {{project_root}}/adapter_relocated_sanitized.sh "$artifact" "$manifest" "{{project_root}}/tools/nextest_artifact.py" "{{project_root}}/baseline/normalized/cargo-metadata.json" "{{project_root}}/baseline/normalized/binaries.json" "{{project_root}}/baseline/normalized/tests.json" "$python" "$nextest"
+    ADAPTER_RELOCATED_ARTIFACT_BUCK_OUTPUT_PATH="$artifact" ADAPTER_RELOCATED_MANIFEST_BUCK_OUTPUT_PATH="$manifest" ADAPTER_RELOCATED_RUNNER_BUCK_OUTPUT_PATH="$runner" ADAPTER_RELOCATED_NEXTEST_BUCK_OUTPUT_PATH="$nextest" \
+    {{project_root}}/adapter_relocated_sanitized.sh "$artifact" "$manifest" "$runner" "{{project_root}}/baseline/normalized/cargo-metadata.json" "{{project_root}}/baseline/normalized/binaries.json" "{{project_root}}/baseline/normalized/tests.json" "$nextest"
 adapter_relocated_preflight_test:
     BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/adapter_relocated_preflight_test.sh
 adapter_relocated_ci_failure_propagation_test:

@@ -1,0 +1,2 @@
+buildscript.run = true
+features = ["linux_latest", "use-libc"]

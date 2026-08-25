@@ -18,10 +18,11 @@ grep -F '`buck-artifact` is the only supported adapter mode' "$readme" >/dev/nul
 grep -F -- '--junit-report PATH' "$readme" >/dev/null
 for control in profile filter no-tests report-skipped timeout-seconds; do grep -F -- "$control" "$readme" "$baseline" "$roadmap" >/dev/null; done
 grep -F 'copies the nextest bytes unchanged' "$readme" >/dev/null
-grep -F 'Python 3.11+' "$readme" >/dev/null
+grep -F 'Rust-only' "$readme" >/dev/null
+grep -F 'no Python' "$readme" >/dev/null
 grep -F 'no-tests' "$readme" >/dev/null
 grep -F 'returns `100`' "$readme" >/dev/null
-grep -F 'Process interruption, abort, and cancellation have no stable adapter classification' "$readme" >/dev/null
+grep -F 'signal-derived status' "$readme" >/dev/null
 grep -F 'observation/regeneration inputs only' "$readme" >/dev/null
 grep -F 'nextest_buck_artifact_junit' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'local-preferred' "$readme" "$baseline" "$roadmap" >/dev/null
@@ -79,7 +80,7 @@ legacy_switch=$(printf '%s%s' -- -scenario)
 ! grep -F -- "$legacy_switch" "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'no timeout-specific marker' "$roadmap" >/dev/null
 grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
-grep -F '## Prioritized follow-ups (not yet implemented)' "$roadmap" >/dev/null
+grep -F '## Prioritized follow-ups' "$roadmap" >/dev/null
 grep -F 'The completed milestones above remain the current-state record' "$roadmap" >/dev/null
 grep -F 'successful dispatch path' "$follow_up" >/dev/null
 grep -F 'no-tests = auto' "$follow_up" >/dev/null
@@ -111,7 +112,7 @@ done
 [ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 9 ]
 ! grep -Ei '^([0-9]+\.|###).*follow-up.*(complete|implemented)' "$roadmap" >/dev/null
 
-for evidence in 'nextest.bzl:26-77' 'adapter.sh:833-887' 'tools/nextest_artifact.py:20-29, 81-83, 158-175,' '292-377' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md:210-258'; do
+for evidence in 'nextest.bzl:206-272' 'adapter/src/bin/nextest_buck_artifact.rs' 'adapter/src/manifest_v1.rs' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md'; do
     grep -F "$evidence" "$roadmap_follow_ups" >/dev/null
 done
 for heading in '## Architectural invariants' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement a Rust runner' '## 5. Prove real nextest through the declared production path' '## 6. Support a realistic Buck Rust runtime closure' '## 7. Prove the core nextest value proposition' '## 8. Simplify the compatibility layer and consumer setup' '## 9. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
@@ -136,8 +137,10 @@ done
 
 ! grep -F 'Production remains `local_only = True`' "$readme" >/dev/null
 grep -F 'local-preferred (`prefer_local = True`)' "$readme" >/dev/null
+grep -F 'checksum-verified HTTP archives' "$readme" >/dev/null
+grep -F 'Windows is unsupported' "$readme" >/dev/null
 grep -F 'cache upload disabled' "$readme" >/dev/null
-grep -F 'caller-configured supported executor' "$readme" >/dev/null
+grep -F 'caller-owned RE configuration' "$readme" >/dev/null
 grep -F -- '--remote-only' "$readme" >/dev/null
 
 python3 - "$roadmap_follow_ups" "$root/BUCK" "$root/Justfile" "$root" <<'PY'

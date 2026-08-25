@@ -63,14 +63,15 @@ else
     grep -F 'test(=fail_case)' "$what_failed" >/dev/null
 fi
 
-cleanup_roots=$(sed -n 's/.*buck2-nextest-adapter: cleanup=once root=//p' "$first_output" | sort -u)
-[ "$(printf '%s\n' "$cleanup_roots" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] || {
-    cat "$first_output"
-    printf '%s\n' 'expected one distinct adapter cleanup root' >&2
+# The Rust runner owns a private child below Buck's action scratch path and
+# removes it after the process group is quiescent.  Assert that behavior by
+# outcome, not by the retired shell cleanup log or private-directory spelling.
+if find "$project/buck-out" -type d -name 'buck2-nextest-buck-artifact.*' -print -quit 2>/dev/null | grep -q .; then
+    find "$project/buck-out" -type d -name 'buck2-nextest-buck-artifact.*' -print >&2
+    cat "$first_output" >&2
+    printf '%s\n' 'adapter scratch child was retained after failed action' >&2
     exit 1
-}
-private_root=$cleanup_roots
-[ -n "$private_root" ] && [ ! -e "$private_root" ]
+fi
 
 find "$project" -maxdepth 1 -type f -name 'junit.xml' -print | sort >"$after_reports"
 cmp -s "$before_reports" "$after_reports"

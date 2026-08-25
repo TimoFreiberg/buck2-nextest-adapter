@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S /usr/bin/python3
 import json
 import os
 import signal
@@ -20,17 +20,17 @@ if args[:2] == ["nextest", "list"]:
 if args[:2] != ["nextest", "run"]:
     raise SystemExit("unexpected cargo-nextest argv")
 
-pid_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_PID"])
-ready_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_READY"])
-terminated_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_TERMINATED"])
+pid_path = Path(os.environ["NEXTEST_SIGNAL_PID"])
+ready_path = Path(os.environ["NEXTEST_SIGNAL_READY"])
+terminated_path = Path(os.environ["NEXTEST_SIGNAL_TERMINATED"])
 profile = args[args.index("--profile") + 1]
 target = Path(os.environ["CARGO_MANIFEST_DIR"]) / "target" / "nextest" / profile
 target.mkdir(parents=True, exist_ok=True)
 state = {"terminated": False}
-child_pid_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_CHILD_PID"])
-grandchild_pid_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_GRANDCHILD_PID"])
-child_terminated_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_CHILD_TERMINATED"])
-grandchild_terminated_path = Path(os.environ["BUCK2_NEXTEST_SIGNAL_GRANDCHILD_TERMINATED"])
+child_pid_path = Path(os.environ["NEXTEST_SIGNAL_CHILD_PID"])
+grandchild_pid_path = Path(os.environ["NEXTEST_SIGNAL_GRANDCHILD_PID"])
+child_terminated_path = Path(os.environ["NEXTEST_SIGNAL_CHILD_TERMINATED"])
+grandchild_terminated_path = Path(os.environ["NEXTEST_SIGNAL_GRANDCHILD_TERMINATED"])
 
 def child_loop():
     def child_term(_signum, _frame):

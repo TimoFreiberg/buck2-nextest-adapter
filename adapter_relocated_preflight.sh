@@ -39,7 +39,7 @@ case "$buck" in
         ;;
 esac
 
-for command_name in sh env mkdir cp chmod mktemp dirname rm grep sed cat basename tr wc bash realpath awk cut tail ln python3; do
+for command_name in sh env mkdir cp chmod mktemp dirname rm grep sed cat basename tr wc bash awk cut tail ln; do
     lookup_command "$command_name" || missing_command "$command_name"
 done
 

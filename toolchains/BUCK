@@ -34,8 +34,6 @@ nextest_bundle_resource(
 nextest_toolchain(
     name = "nextest",
     visibility = ["PUBLIC"],
-    cargo = ":nextest-cargo",
-    python = ":nextest-python",
     cargo_nextest = ":nextest-cargo-nextest-v1",
     bundle_resources = [":fixture-runtime-resource"],
     bundle_environment = [["BUCK2_BUNDLE_RESOURCE", "relative_path", "runtime/fixture-resource.txt"], ["BUCK2_BUNDLE_LITERAL", "literal", "declared"]],
@@ -45,8 +43,6 @@ nextest_toolchain(
 nextest_toolchain(
     name = "nextest-v1",
     visibility = ["PUBLIC"],
-    cargo = ":nextest-cargo",
-    python = ":nextest-python",
     cargo_nextest = ":nextest-cargo-nextest-v1",
     bundle_resources = [":fixture-runtime-resource"],
     bundle_environment = [["BUCK2_BUNDLE_RESOURCE", "relative_path", "runtime/fixture-resource.txt"], ["BUCK2_BUNDLE_LITERAL", "literal", "declared"]],
@@ -56,8 +52,6 @@ nextest_toolchain(
 nextest_toolchain(
     name = "nextest-v2",
     visibility = ["PUBLIC"],
-    cargo = ":nextest-cargo",
-    python = ":nextest-python",
     cargo_nextest = ":nextest-cargo-nextest-v2",
     bundle_resources = [":fixture-runtime-resource"],
     bundle_environment = [["BUCK2_BUNDLE_RESOURCE", "relative_path", "runtime/fixture-resource.txt"], ["BUCK2_BUNDLE_LITERAL", "literal", "declared"]],

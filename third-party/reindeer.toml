@@ -1,0 +1,17 @@
+# Reindeer configuration for Buck-owned, non-vendored crates.io archives.
+# The revision is recorded in reindeer-version.toml and checked by CI.
+manifest_path = "Cargo.toml"
+third_party_dir = "."
+precise_srcs = true
+include_top_level = false
+cargo_env = [
+    "CARGO_PKG_VERSION",
+    "CARGO_PKG_VERSION_MAJOR",
+    "CARGO_PKG_VERSION_MINOR",
+    "CARGO_PKG_VERSION_PATCH",
+    "CARGO_PKG_VERSION_PRE",
+]
+vendor = false
+
+[buck]
+split = false

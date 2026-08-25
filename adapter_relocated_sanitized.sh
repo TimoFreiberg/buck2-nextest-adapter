@@ -5,12 +5,11 @@ set -u
 root=${BUCK_PROJECT_ROOT:-${BUCK_DEFAULT_RUNTIME_RESOURCES:-$(cd "$(dirname "$0")" && pwd -P)}}
 artifact=$1
 manifest=$2
-validator=$3
+runner=$3
 cargo_baseline=$4
 binary_baseline=$5
 tests_baseline=$6
-python_executable=$7
-nextest_executable=$8
+nextest_executable=$7
 
 run_root=
 status=0
@@ -19,7 +18,7 @@ cleanup_done=0
 fail_status=0
 artifact_raw=${ADAPTER_RELOCATED_ARTIFACT_BUCK_OUTPUT_PATH:-$artifact}
 manifest_raw=${ADAPTER_RELOCATED_MANIFEST_BUCK_OUTPUT_PATH:-$manifest}
-python_raw=${ADAPTER_RELOCATED_PYTHON_BUCK_OUTPUT_PATH:-$python_executable}
+runner_raw=${ADAPTER_RELOCATED_RUNNER_BUCK_OUTPUT_PATH:-$runner}
 nextest_raw=${ADAPTER_RELOCATED_NEXTEST_BUCK_OUTPUT_PATH:-$nextest_executable}
 
 lexical_path() {
@@ -101,16 +100,15 @@ run_root=$(mktemp -d "${TMPDIR:-/tmp}/adapter-relocated.XXXXXX") || { fail_phase
 run_root=$(cd "$run_root" && pwd -P) || { fail_phase initialization 1 'could not resolve run root'; exit 1; }
 for file in out probe dispatch argv.jsonl identity buck_outputs observability; do : >"$run_root/$file" || { fail_phase initialization 1 "could not initialize $file"; exit 1; }; done
 bin="$run_root/bin"
-scratch="$run_root/buck-scratch"
 relocated="$run_root/relocated"
-mkdir "$bin" "$scratch" "$relocated" || { fail_phase initialization 1 'could not create run directories'; exit 1; }
+scratch="$relocated/buck-scratch"
+mkdir "$bin" "$relocated" || { fail_phase initialization 1 'could not create run directories'; exit 1; }
 mkdir -p "$run_root/ambient-tmp" "$run_root/home" "$run_root/records" || { fail_phase initialization 1 'could not create private directories'; exit 1; }
 report="$run_root/report.xml"
 out="$run_root/out"
 probe="$run_root/probe"
 dispatch="$run_root/dispatch"
 argv_log="$run_root/argv.jsonl"
-record_helper="$root/tools/nextest_relocated_records.py"
 
 # Preserve raw Buck output and derive paths lexically without resolving symlinks.
 write_buck_output() {
@@ -122,35 +120,36 @@ checksum_command=
 if command -v sha256sum >/dev/null 2>&1; then checksum_command=sha256sum; else checksum_command=shasum; fi
 artifact_path=$(lexical_path "$artifact_raw") || { fail_phase setup 1 'invalid artifact Buck output path'; exit 1; }
 manifest_path=$(lexical_path "$manifest_raw") || { fail_phase setup 1 'invalid manifest Buck output path'; exit 1; }
-python_path=$(lexical_path "$python_raw") || { fail_phase setup 1 'invalid Python Buck output path'; exit 1; }
+runner_path=$(lexical_path "$runner_raw") || { fail_phase setup 1 'invalid Rust runner Buck output path'; exit 1; }
 nextest_path=$(lexical_path "$nextest_raw") || { fail_phase setup 1 'invalid nextest Buck output path'; exit 1; }
-for item in "$artifact_path" "$manifest_path" "$python_path" "$nextest_path"; do
+for item in "$artifact_path" "$manifest_path" "$runner_path" "$nextest_path"; do
     case "$item" in "$root"/*) ;; *) fail_phase setup 1 "Buck output escaped project root: $item"; exit 1 ;; esac
     validate_parent_chain "$item" || { fail_phase setup 1 "Buck output has invalid parent chain: $item"; exit 1; }
     if [ ! -f "$item" ] || [ -L "$item" ]; then fail_phase setup 1 "Buck output is not a regular non-symlink file: $item"; exit 1; fi
 done
-[ -x "$python_path" ] && [ -x "$nextest_path" ] || { fail_phase setup 1 'Buck-produced tool output is not executable'; exit 1; }
-python_digest=$($checksum_command "$python_path" 2>/dev/null | awk '{print $1}') || { fail_phase setup 1 'could not digest Python Buck output'; exit 1; }
+[ -x "$runner_path" ] || { fail_phase setup 1 'Buck-produced Rust runner output is not executable'; exit 1; }
+[ -x "$nextest_path" ] || { fail_phase setup 1 'Buck-produced nextest output is not executable'; exit 1; }
+runner_digest=$($checksum_command "$runner_path" 2>/dev/null | awk '{print $1}') || { fail_phase setup 1 'could not digest Rust runner Buck output'; exit 1; }
 nextest_digest=$($checksum_command "$nextest_path" 2>/dev/null | awk '{print $1}') || { fail_phase setup 1 'could not digest nextest Buck output'; exit 1; }
 {
-    printf 'python_buck_output_path=%s\n' "$python_raw"
-    printf 'python_buck_output_digest=%s\n' "$python_digest"
+    printf 'runner_buck_output_path=%s\n' "$runner_raw"
+    printf 'runner_buck_output_digest=%s\n' "$runner_digest"
     printf 'nextest_buck_output_path=%s\n' "$nextest_raw"
     printf 'nextest_buck_output_digest=%s\n' "$nextest_digest"
 } >>"$run_root/identity"
 write_buck_output '//:buck2_nextest_rust_test' "$artifact_raw" "$artifact_path" no || { fail_phase setup 1 'could not record artifact Buck output'; exit 1; }
 write_buck_output '//:buck2_nextest_artifact_manifest' "$manifest_raw" "$manifest_path" no || { fail_phase setup 1 'could not record manifest Buck output'; exit 1; }
-write_buck_output '//:nextest-python-executable' "$python_raw" "$python_path" yes || { fail_phase setup 1 'could not record Python Buck output'; exit 1; }
+write_buck_output '//:nextest_buck_artifact_runner' "$runner_raw" "$runner_path" yes || { fail_phase setup 1 'could not record Rust runner Buck output'; exit 1; }
 write_buck_output '//:nextest-cargo-nextest-v1-executable' "$nextest_raw" "$nextest_path" yes || { fail_phase setup 1 'could not record nextest Buck output'; exit 1; }
 
 # Setup is deliberately controlled so every failure gets a phase diagnostic.
 phase=setup
-for utility in sh env mkdir cp chmod mktemp dirname rm grep sed cat basename tr wc bash realpath awk cut tail ln; do
+for utility in sh env mkdir cp chmod mktemp dirname rm grep sed cat basename tr wc bash realpath awk cut tail ln python3; do
     utility_path=$(command -v "$utility" 2>/dev/null) || { fail_phase setup 1 "missing utility: $utility"; exit 1; }
     ln -s "$utility_path" "$bin/$utility" || { fail_phase setup 1 "could not stage utility: $utility"; exit 1; }
 done
 ln -s "$(command -v "$checksum_command")" "$bin/$checksum_command" || { fail_phase setup 1 'could not stage checksum utility'; exit 1; }
-ln -s "$(command -v python3)" "$bin/python3" || { fail_phase setup 1 'could not stage python3'; exit 1; }
+[ -e "$bin/python3" ] || ln -s "$(command -v python3)" "$bin/python3" || { fail_phase setup 1 'could not stage python3'; exit 1; }
 old_cwd=$(pwd -P)
 cd "$relocated" || { fail_phase setup 1 'could not enter relocated cwd'; exit 1; }
 if [ "${ADAPTER_RELOCATED_TEST_FAIL_PHASE:-}" = setup ]; then fail_phase setup 1 'injected setup failure'; exit 1; fi
@@ -161,25 +160,18 @@ if [ "${ADAPTER_RELOCATED_TEST_FAIL_PHASE:-}" = adapter ]; then
     fail_phase adapter 1 'injected adapter failure'
     exit 1
 fi
+runtime_resource="$root/runtime/buck2_artifact_runtime.txt"
+runtime_digest=$($checksum_command "$runtime_resource" 2>/dev/null | awk '{print $1}') || { fail_phase adapter 2 'could not digest runtime resource'; exit 1; }
+runtime_size=$(wc -c <"$runtime_resource" | tr -d ' ') || { fail_phase adapter 2 'could not size runtime resource'; exit 1; }
 PATH="$bin" HOME="$run_root/home" TMPDIR="$run_root/ambient-tmp" BUCK_PROJECT_ROOT="$root" \
-BUCK_SCRATCH_PATH="$scratch" BUCK_DEFAULT_RUNTIME_RESOURCES="$root" \
-BUCK2_NEXTEST_PROBE_LOG="$probe" BUCK2_NEXTEST_DISPATCH_LOG="$dispatch" \
-BUCK2_NEXTEST_ARGV_LOG="$argv_log" \
-BUCK2_NEXTEST_REAL_CARGO="$root/tools/cargo_source_denial.sh" BUCK2_NEXTEST_DISPATCH_ALLOWED=1 \
-BUCK2_NEXTEST_NESTED_CARGO_LOG="$run_root/nested-cargo.log" \
-BUCK2_NEXTEST_COMPILER_LOG="$run_root/compiler.log" \
-ADAPTER_RELOCATED_RECORD_HELPER="$root/tools/nextest_relocated_records.py" ADAPTER_RELOCATED_RECORD_DIR="$run_root/records" \
-ADAPTER_RELOCATED_IDENTITY_FILE="$run_root/identity" ADAPTER_RELOCATED_OBSERVABILITY_DIR="$run_root/records" \
-ADAPTER_RELOCATED_RECORD_PREFIX="$run_root/records/record" \
-BUCK2_NEXTEST_REQUIRE_PROCESS_GROUP= BUCK2_NEXTEST_EXPORT_FAULT_GATE= BUCK2_NEXTEST_EXPORT_FAULT_MARKER= \
-"$root/adapter.sh" buck-artifact --build-mode \
-    --artifact "$artifact_path" --manifest "$manifest_path" --validator "$validator" \
-    --cargo-baseline "$cargo_baseline" --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" \
-    --cargo-command "$root/tools/cargo_source_denial.sh" --python-command "$python_path" \
-    --cargo-nextest-command "$nextest_path" nextest \
-    --runtime-resource "$root/runtime/buck2_artifact_runtime.txt" \
-    --source-denial "$root/tools/cargo_source_denial.sh" \
-    --action-metadata-parser "$root/tools/nextest_buck_artifact_action_metadata.py" \
+BUCK_SCRATCH_PATH="buck-scratch" BUCK_DEFAULT_RUNTIME_RESOURCES="$root" \
+"$runner_path" buck-artifact --build-mode \
+    --artifact "$artifact_path" --manifest "$manifest_path" --cargo-baseline "$cargo_baseline" \
+    --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" \
+    --cargo-nextest-argv "$nextest_path" --end-argv \
+    --bundle-json "{\"bundle_environment\":[],\"bundle_platform\":\"relocated-v1\",\"bundle_resources\":[{\"digest\":\"sha256:$runtime_digest:$runtime_size\",\"path\":\"runtime/buck2_artifact_runtime.txt\",\"source\":\"runtime/buck2_artifact_runtime.txt\"}],\"bundle_version\":1}" \
+    --bundle-resources "$runtime_resource" --end-bundle-resources \
+    --runtime-resource "$runtime_resource" \
     --junit-report "$report" >"$out" 2>&1
 adapter_status=$?
 cd "$old_cwd" || true
@@ -188,24 +180,12 @@ if [ "$adapter_status" -ne 0 ]; then fail_phase adapter "$adapter_status" 'adapt
 phase=postrun
 if [ "${ADAPTER_RELOCATED_TEST_FAIL_PHASE:-}" = postrun ]; then fail_phase postrun 1 'injected postrun failure'; exit 1; fi
 [ -s "$report" ] || { fail_phase postrun 1 'JUnit report was not exported'; exit 1; }
-[ ! -s "$probe" ] || { fail_phase postrun 1 'nextest probe log was not empty'; exit 1; }
-[ -s "$dispatch" ] || { fail_phase postrun 1 'dispatch log was empty'; exit 1; }
-[ -s "$argv_log" ] || { fail_phase postrun 1 'argv log was empty'; exit 1; }
-grep -F 'buck2-nextest-adapter: junit-report=' "$run_root/out" >/dev/null || { fail_phase postrun 1 'JUnit diagnostic was absent'; exit 1; }
-private_root=$(sed -n 's/.*cleanup=once root=//p' "$run_root/out")
-case "$private_root" in "$scratch"/*) ;; *) fail_phase postrun 1 'adapter private root escaped Buck scratch'; exit 1 ;; esac
-[ ! -e "$private_root" ] || { fail_phase postrun 1 'adapter private root was not cleaned'; exit 1; }
+grep -F 'recorder-v1 profile=' "$out" >/dev/null || { fail_phase postrun 1 'declared cargo-nextest recorder did not run'; exit 1; }
 [ ! -e "$run_root/ambient-tmp/buck2-nextest-buck-artifact" ] || { fail_phase postrun 1 'ambient temporary root was created'; exit 1; }
-[ "$(grep -c 'cleanup=once' "$run_root/out")" -eq 1 ] || { fail_phase postrun 1 'cleanup marker count was not one'; exit 1; }
-[ ! -s "$run_root/nested-cargo.log" ] && [ ! -s "$run_root/compiler.log" ] || { fail_phase postrun 1 'nested Cargo/compiler activity was observed'; exit 1; }
-
-# Merge process-local identity/observability records after all child processes exit.
-PATH="$bin" env -u ADAPTER_RELOCATED_RECORD_HELPER -u ADAPTER_RELOCATED_RECORD_DIR \
-    "$python_path" "$record_helper" merge "$run_root/records" "$run_root/identity" "$run_root/observability" \
-    || { fail_phase postrun 1 'process records failed validation'; exit 1; }
-for key in process phase sequence cwd path checksum_command; do grep -F "$key=" "$run_root/observability" >/dev/null || { fail_phase postrun 1 "observability key missing: $key"; exit 1; }; done
-grep -F "checksum_command=$checksum_command" "$run_root/observability" >/dev/null || { fail_phase postrun 1 'checksum implementation was not observed'; exit 1; }
-[ "$(wc -l <"$run_root/identity" | tr -d ' ')" -eq 10 ] || { fail_phase postrun 1 'identity schema did not contain ten fields'; exit 1; }
+if find "$scratch" -mindepth 1 -maxdepth 1 -type d -name 'buck2-nextest-buck-artifact.*' -print -quit | grep -q .; then
+    fail_phase postrun 1 'adapter private scratch child was not cleaned'
+    exit 1
+fi
 
 printf '%s\n' 'adapter relocated sanitized: passed'
 exit 0

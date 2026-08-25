@@ -55,4 +55,11 @@ for sentinel in tools/__pycache__/repository_hygiene.cpython-311.pyc docs/reposi
     fi
 done
 
+# The third-party dependency graph (Cargo.lock, generated BUCK, pinned reindeer
+# metadata, and the auditable dependency note) is verified structurally by the
+# stdlib-only checker; it must stay green whenever the graph or reindeer
+# version changes. Regenerate the note with:
+#   python3 third-party/check_dependencies.py update-note third-party
+python3 "$project/third-party/check_dependencies.py" check "$project/third-party"
+
 printf '%s\n' 'repository hygiene: passed'

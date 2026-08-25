@@ -1,0 +1,3 @@
+features = ["std"]
+omit_features = ["default"]
+rustc_flags = ["--cfg=fast_arithmetic=\"64\""]
