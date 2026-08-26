@@ -54,6 +54,26 @@ For runs, a private `.config/nextest.toml` defines the selected safe profile and
 
 Nextest writes JUnit beneath the private workspace. After the child exits, the adapter saves its status, verifies any emitted report as XML, copies the bytes to a mode-0600 same-directory temporary beside the caller destination, and atomically renames it. The report therefore survives private-root cleanup, and the adapter does not rewrite or add XML elements. Byte-digest tests compare a trusted private nextest report with the exported file.
 
+## Three distinct result surfaces
+
+The repository intentionally has three different output/result contracts:
+
+1. **Stock `buck2 test`:** Buck owns execution and reports status, stdout, and
+   stderr. It does not promise a caller-visible JUnit file for failed tests.
+2. **Opt-in project test executor:** `test.v2_test_executor` selects the
+   pinned executor for a fresh `buck2 test` invocation. For `ExternalRunnerSpec`
+   values with `type = "nextest"`, the executor asks Buck to materialize one
+   local declared `junit` directory, injects `BUCK2_NEXTEST_JUNIT_DIR`, validates its unchanged
+   `junit.xml`, and exports it into the caller's fresh directory, including on test failure and
+   timeout. The executor remains opt-in and is pinned to Buck commit
+   `1560aca2002865cd73d7cafb22c705cfb640b2bc`; it does not dispatch
+   cargo-nextest or implement the schema-v2 runner yet. Buck's nonzero status
+   remains authoritative, and valid reports from other targets can survive an
+   infrastructure failure.
+3. **Normal build action:** `//:nextest_buck_artifact_junit` declares a fixed
+   `junit.xml` build output. That output is available to consumers only when
+   the build action succeeds; it is not a failed-test report retrieval API.
+
 ## Declared build output and caller-owned test output
 
 `//:nextest_buck_artifact_junit` is a separate normal Buck build action. It declares one successful fixed-name `junit.xml` output under `buck-out`; its five profile/filter/no-tests/report-skipped/timeout attrs are literal action inputs, so result-affecting configurations have distinct action identity. It runs local-preferred with the declared cargo-nextest executable target. Ordinary builds remain local in this checkout; explicit `--remote-only` requires caller-owned supported RE configuration. The launcher target must provide `RunInfo` and is invoked with the fixed `nextest` subcommand. Build mode requires all runtime resources explicitly; it fails closed before probing if any required input is absent. The v1 toolchain bundle extends this with provider-owned direct execution resources, normalized POSIX destinations, checked `sha256:<hex>:<size>` digests, ordered typed environment records (`literal` or `relative_path`), and a non-empty opaque execution identity. Shared libraries and launcher support files are not inferred from PATH or host state; unsafe bundle data fails before probing. Buck supplies `BUCK_SCRATCH_PATH` for private per-run state, and the runner creates one project-relative private child without a direct-mode fallback. Its private synthesized workspace, metadata, target state, and profile-derived intermediate report are per-run scratch and are removed only after the owned process group is drained; no persistent nextest rerun store is created.

@@ -10,6 +10,58 @@ This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds 
 
 The adapter runtime is Rust-only and requires no Python, Cargo, source-tree helper, ambient PATH tool, or runtime network access. Consumers provide the cargo-nextest launcher as an executable Buck target exposing `RunInfo`; the launcher is invoked with the fixed `nextest` subcommand. The v1 `nextest_toolchain` contract also declares an ordered bundle of regular execution resources, normalized POSIX destinations, `sha256:<hex>:<size>` identities, typed literal/relative-path environment records, and an opaque non-empty `bundle_platform` identity. Every launcher support file, shared library, or other runtime file not supplied by `RunInfo` must be a bundle resource; the adapter does not infer or obtain ambient runtime files. Clean uncached Buck builds fetch the pinned Rust crates through Buck-owned checksum-verified HTTP archives; that build-time network requirement is separate from network-free adapter actions. Production actions are local-preferred (`prefer_local = True`) with cache upload disabled. Supported adapter hosts are Linux and macOS with native process groups; Windows is unsupported in this milestone.
 
+## Opt-in Buck test executor and JUnit export
+
+The repository also contains an **opt-in** Buck v2 test executor for the pinned
+Buck binary `buck2 2026-07-14-1560aca2002865cd73d7cafb22c705cfb640b2bc`.
+The executor package is isolated from the adapter and requires Rust 1.88 or
+newer. It preserves Buck's ownership of test execution: Buck sends each
+`ExternalRunnerSpec`, the executor asks Buck's `TestOrchestrator.Execute2` to
+run the command, and the executor reports the resulting status back to Buck.
+It does not run test commands itself and it is not the repository default.
+
+For a fresh run, create a private caller-owned directory whose only child is an
+empty directory named `junit`, then pass that child to the executor:
+
+```sh
+root=$(mktemp -d "${TMPDIR:-/tmp}/buck2-nextest.XXXXXX")
+mkdir "$root/junit"
+set +e
+buck2 --config test.v2_test_executor="$(buck2 build --show-output //:nextest_v2_executor | tail -1 | cut -d' ' -f2)" \
+  test //your:nextest-target -- --junit-dir "$root/junit"
+status=$?
+set -e
+# Upload "$root/junit" as diagnostics, then preserve "$status" as the CI result.
+exit "$status"
+```
+
+The deterministic timeout form is `-- --timeout 1 --junit-dir "$root/junit"`.
+The executor accepts Buck's pinned FD or loopback-address transport preamble,
+consumes Buck's compatibility arguments, and never forwards `--timeout` or
+`--junit-dir` to the test command. The destination must be an absolute,
+fresh, empty `junit` directory outside the repository and outside every path
+containing a `buck-out` component. The executor validates Buck's returned
+local declared output without following symlinks, requires exactly one
+`junit.xml`, bounds and validates the XML, and publishes unchanged bytes to a
+0600 temporary followed by an atomic no-replace commit. It never writes into
+the source tree or an unmanaged `buck-out` directory.
+
+A passing test reports Buck `PASS` and publishes its report. A failing test or
+Buck timeout reports `FAIL`/`TIMEOUT`, keeps the original Buck stdout/stderr
+details, and still publishes a valid report. A missing, malformed, unsafe, or
+unexportable report produces `INFRA_FAILURE` for that target and a nonzero Buck
+aggregate result; a valid report from another target remains available. Buck's
+exit status is authoritative, so CI must upload any files in the fresh
+caller-owned directory without replacing the failed status. Cancellation or a
+transport/reporting failure stops later publication; already committed reports
+are retained and late temporary reports are not committed.
+
+This milestone proves the Buck protocol and output-ownership boundary with
+compiled fixtures. Fixture XML is deliberately **not** evidence that
+cargo-nextest ran, and this executor does not implement schema-v2 metadata,
+nextest discovery, or cargo-nextest dispatch. Those belong to the following
+runner milestone.
+
 ## Canonical invocation
 
 `buck-artifact` remains the only supported adapter mode. The first reusable Buck test surface is `nextest_buck_test`, backed by the pinned Buck2 `ExternalRunnerTestInfo` API:

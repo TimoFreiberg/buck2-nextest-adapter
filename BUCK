@@ -15,6 +15,12 @@ alias(
     visibility = ["PUBLIC"],
 )
 
+alias(
+    name = "nextest_v2_executor",
+    actual = "//executor:nextest-v2-executor",
+    visibility = ["PUBLIC"],
+)
+
 filegroup(
     name = "runtime/buck2_artifact_runtime.txt",
     srcs = ["runtime/buck2_artifact_runtime.txt"],
@@ -498,6 +504,19 @@ sh_test(
     name = "repository_hygiene",
     test = "repository_hygiene.sh",
     resources = ["repository_hygiene.sh"],
+)
+
+sh_test(
+    name = "executor_generated_protocol_clean",
+    test = "executor_generated_protocol_clean.sh",
+    resources = ["executor_generated_protocol_clean.sh"],
+)
+
+sh_test(
+    name = "executor_rejects_unsupported_invocation",
+    test = "executor_rejects_unsupported_invocation.sh",
+    args = ["$(location :nextest_v2_executor)"],
+    resources = ["executor_rejects_unsupported_invocation.sh", ":nextest_v2_executor"],
 )
 
 sh_test(

@@ -1,0 +1,99 @@
+rust_library(
+    name = "nextest-v2-executor-lib",
+    visibility = ["PUBLIC"],
+    srcs = glob(["src/**/*.rs"]),
+    crate = "buck2_nextest_executor",
+    crate_root = "src/lib.rs",
+    deps = [
+        "//third-party:futures",
+        "//third-party:hyper-util",
+        "//third-party:libc",
+        "//third-party:prost",
+        "//third-party:prost-types",
+        "//third-party:quick-xml",
+        "//third-party:rustix",
+        "//third-party:tokio",
+        "//third-party:tokio-stream",
+        "//third-party:tonic",
+        "//third-party:tonic-prost",
+        "//third-party:tower",
+    ],
+)
+
+rust_binary(
+    name = "nextest-v2-executor",
+    visibility = ["PUBLIC"],
+    srcs = ["src/main.rs"],
+    crate = "nextest_v2_executor",
+    crate_root = "src/main.rs",
+    deps = [
+        ":nextest-v2-executor-lib",
+        "//third-party:tokio",
+    ],
+)
+
+load(":fixture.bzl", "nextest_v2_executor_fixture")
+
+rust_binary(
+    name = "nextest-v2-executor-fixture",
+    srcs = ["src/fixture.rs"],
+    crate = "nextest_v2_executor_fixture",
+    crate_root = "src/fixture.rs",
+)
+
+[
+    nextest_v2_executor_fixture(
+        name = "nextest-v2-executor-fixture-{}".format(mode),
+        executable = ":nextest-v2-executor-fixture",
+        mode = mode,
+        nonce = "buck-fixture",
+    )
+    for mode in ["pass", "fail", "timeout", "missing", "malformed", "symlink", "extra", "cancel"]
+]
+
+nextest_v2_executor_fixture(
+    name = "nextest-v2-executor-fixture-test",
+    executable = ":nextest-v2-executor-fixture",
+    mode = "pass",
+    nonce = "buck-fixture",
+)
+
+nextest_v2_executor_fixture(
+    name = "nextest-v2-executor-fixture-ordinary",
+    executable = ":nextest-v2-executor-fixture",
+    mode = "pass",
+    test_type = "ordinary",
+    nonce = "ordinary-fixture",
+)
+
+rust_test(
+    name = "nextest-v2-executor-tests",
+    srcs = glob(["src/**/*.rs"]),
+    crate = "buck2_nextest_executor",
+    crate_root = "src/lib.rs",
+    deps = [
+        ":nextest-v2-executor-lib",
+        "//third-party:futures",
+        "//third-party:hyper-util",
+        "//third-party:prost",
+        "//third-party:prost-types",
+        "//third-party:quick-xml",
+        "//third-party:rustix",
+        "//third-party:tempfile",
+        "//third-party:tokio",
+        "//third-party:tokio-stream",
+        "//third-party:tonic",
+        "//third-party:tonic-prost",
+        "//third-party:tower",
+    ],
+    mapped_srcs = {
+        "src/proto/gen/buck.test.rs": "src/proto/gen/buck.test.rs",
+    },
+    visibility = ["PUBLIC"],
+)
+
+filegroup(
+    name = "executor-protocol",
+    srcs = glob(["proto/**/*.proto"]) + ["proto/README.md", "proto/regenerate.sh"],
+    copy = False,
+)

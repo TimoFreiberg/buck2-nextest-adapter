@@ -69,6 +69,35 @@ research are required before interpreting the platform-propagation failure.
 <a id="primary-buck-test-surface"></a>
 ## 2. Define the primary Buck test surface
 
+### Completed prerequisite: pinned opt-in executor handoff
+
+Before implementing the generic Rust runner, this repository now proves the
+primary `buck2 test` transport and failed-report boundary with the project-owned
+executor in `executor/`. It is selected only through
+`test.v2_test_executor=<absolute path>` and is pinned to Buck commit
+`1560aca2002865cd73d7cafb22c705cfb640b2bc`. Buck remains responsible for every
+command, resource decision, status, diagnostic stream, and cancellation through
+`Execute2`; the executor preserves stock unordered request processing and
+reports `EndOfTestResults` rather than replacing Buck's verdict.
+
+For exact `nextest` specs, the executor requests one non-remote declared
+`junit` directory, injects `BUCK2_NEXTEST_JUNIT_DIR`, validates Buck's returned
+local directory and unchanged XML, and securely exports it to a fresh,
+caller-owned directory supplied after `--`. The caller directory is outside
+the repository and unmanaged `buck-out`, and publication is bounded,
+symlink-resistant, mode `0600`, atomic, and no-replace. Test failures and
+timeouts retain valid reports while keeping Buck nonzero; malformed or missing
+reports become `INFRA_FAILURE`, and independently valid partial reports remain.
+A cancellation or transport/reporting failure closes future publication without
+falling back to the stock executor.
+
+This is a transport/output proof using compiled fixture XML, not proof of
+cargo-nextest execution. The stock executor remains the default, the existing
+`nextest_buck_artifact_junit` build action remains unchanged behind its separate
+operator decision gate, and the isolated executor requires Rust 1.88+. The
+following generic runner work must consume this boundary rather than move test
+process ownership out of Buck.
+
 **Purpose and evidence.** `nextest.bzl:26-77` currently exposes a declared JUnit
 build action, while fresh test execution belongs to Buck's test lifecycle. The
 current action is documented history and must not be silently removed or

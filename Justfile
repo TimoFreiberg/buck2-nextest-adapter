@@ -4,14 +4,26 @@ project_root := justfile_directory()
 buck := env_var_or_default("BUCK2", "buck2")
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: repository_hygiene _relocation-preflight _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
+ci: repository_hygiene _relocation-preflight _ci-buck2_nextest_executor_junit _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
 
 _relocation-preflight:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/adapter_relocated_preflight.sh {{project_root}}
 
 # Run the Buck-backed test suite from the repository shell.
+_ci-buck2_nextest_executor_junit: _relocation-preflight
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/executor_generated_protocol_clean.sh
+    python3 {{project_root}}/third-party/check_dependencies.py check {{project_root}}/third-party
+    executor=$({{buck}} build --show-output //:nextest_v2_executor | tail -1 | cut -d' ' -f2); case "$executor" in /*) ;; *) executor="{{project_root}}/$executor" ;; esac; \
+        BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/executor_rejects_unsupported_invocation.sh "$executor"
+    executor=$({{buck}} build --show-output //:nextest_v2_executor | tail -1 | cut -d' ' -f2); case "$executor" in /*) ;; *) executor="{{project_root}}/$executor" ;; esac; \
+        BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/executor_argv_pinned_process.sh "$executor"
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/executor_protocol_pinned_process.sh
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/executor_protocol_pinned_tcp_process.sh
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_executor_junit.sh
+
 _buck-ci: _relocation-preflight
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{buck}} test --test-executor-stdout=- --test-executor-stderr=- \
+        //executor:nextest-v2-executor-tests \
         //:buck2_nextest_external_test_surface \
         //:nextest_buck_test_generic_multi_binary \
         //:test_semantic_contract \

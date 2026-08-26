@@ -1,0 +1,3 @@
+# rustversion generates version.expr in its build script and must run it under Buck.
+[buildscript]
+run = true

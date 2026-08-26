@@ -48,6 +48,14 @@ grep -F 'missing relocation prerequisites fail CI with diagnostics' "$readme" >/
 grep -F 'observability gap' "$readme" "$baseline" >/dev/null
 grep -F 'buck clean' "$readme" "$baseline" >/dev/null
 grep -F 'caller-owned' "$baseline" >/dev/null
+grep -F 'test.v2_test_executor' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F '1560aca2002865cd73d7cafb22c705cfb640b2bc' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'Rust 1.88' "$readme" "$roadmap" >/dev/null
+grep -F 'BUCK2_NEXTEST_JUNIT_DIR' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'INFRA_FAILURE' "$readme" "$baseline" "$roadmap" >/dev/null
+grep -F 'fresh caller-owned' "$readme" "$roadmap" >/dev/null
+grep -F 'fixture XML' "$readme" "$roadmap" >/dev/null
+grep -F 'does not dispatch' "$baseline" >/dev/null
 grep -F 'DefaultInfo' "$readme" "$baseline" >/dev/null
 grep -F 'RunInfo' "$readme" "$baseline" >/dev/null
 grep -F 'local convenience' "$readme" "$baseline" >/dev/null

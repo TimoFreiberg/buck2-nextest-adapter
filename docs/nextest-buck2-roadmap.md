@@ -55,6 +55,34 @@ test discovery metadata or a process-execution protocol.
 
 ## Roadmap
 
+### 0. Prove the primary Buck test executor and failed-output handoff
+
+This prerequisite is complete for the pinned local Buck2 integration. The
+project-owned executor is selected only with
+`--config test.v2_test_executor=<absolute-executor-path>` and accepts the
+pinned Buck commit `1560aca2002865cd73d7cafb22c705cfb640b2bc`. Buck still owns
+every test command through `Execute2`, resource throttling, status, diagnostic
+output, and cancellation. The executor preserves stock unordered processing,
+requests a declared local `junit` directory only for specs whose exact type is
+`nextest`, and exports unchanged `junit.xml` bytes to a fresh caller-owned
+`--junit-dir`, including for ordinary failures and timeouts.
+
+The caller directory is deliberately not a Buck output: it is a temporary
+capability supplied by the invocation. The executor validates it outside the
+repository and outside `buck-out`, traverses Buck output without following
+symlinks, bounds and validates XML, and publishes with a 0600 temporary and
+no-replace atomic commit. Invalid reports become per-target
+`INFRA_FAILURE`; independently valid reports remain, while Buck's aggregate
+nonzero status is authoritative. Cancellation and transport/reporting failure
+close future publication rather than falling back to the stock executor.
+
+The compiled fixtures prove protocol/output ownership, not nextest behavior:
+fixture XML is not cargo-nextest output. The isolated package requires Rust
+1.88+, uses vendored protocol bindings from the pinned Buck source, and is
+kept out of the adapter dependency graph. The stock executor remains the
+repository default, and the existing `nextest_buck_artifact_junit` build action
+is unchanged pending its separate operator decision gate.
+
 ### 1. Capture the Cargo/nextest baseline
 
 Before synthesizing anything, record what ordinary nextest consumes from a
