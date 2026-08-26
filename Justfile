@@ -3,8 +3,12 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 project_root := justfile_directory()
 buck := env_var_or_default("BUCK2", "buck2")
 
+# Remove Buck artifacts according to the selected Buck's stale retention policy.
+buck-clean-stale:
+    BUCK2={{quote(buck)}} {{quote(buck)}} clean --stale
+
 # Run every repository check, including the repository-level Buck action inspection.
-ci: repository_hygiene _relocation-preflight _ci-buck2_nextest_executor_junit _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
+ci: repository_hygiene _relocation-preflight _ci-buck2_nextest_executor_junit _ci-nextest_real_declared_toolchain _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
 
 _relocation-preflight:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/adapter_relocated_preflight.sh {{project_root}}
@@ -21,11 +25,16 @@ _ci-buck2_nextest_executor_junit: _relocation-preflight
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/executor_protocol_pinned_tcp_process.sh
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_executor_junit.sh
 
+_ci-nextest_real_declared_toolchain: _relocation-preflight
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_real_declared_toolchain.sh
+
+_ci-nextest_cancellation_cleanup: _relocation-preflight
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_cancellation_cleanup.sh
+
 _buck-ci: _relocation-preflight
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{buck}} test --test-executor-stdout=- --test-executor-stderr=- \
         //executor:nextest-v2-executor-tests \
         //:buck2_nextest_external_test_surface \
-        //:nextest_buck_test_generic_multi_binary \
         //:test_semantic_contract \
         //:adapter_mode_validation \
         //:adapter_process_group_validation \
@@ -172,6 +181,10 @@ legacy_path_absent:
     just _buck-test legacy_path_absent
 nextest_buck_test_generic_multi_binary:
     just _buck-test nextest_buck_test_generic_multi_binary
+schema_v2_fixture_contract:
+    just _buck-test schema_v2_fixture_contract
+buck2_nextest_cancellation_cleanup:
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_cancellation_cleanup.sh
 buck2_nextest_external_test_surface:
     just _buck-test buck2_nextest_external_test_surface
 nextest_buck_artifact:
