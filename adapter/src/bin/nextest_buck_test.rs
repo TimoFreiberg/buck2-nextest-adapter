@@ -1,8 +1,8 @@
 //! Production schema-v2 nextest runner.
 //!
 //! Buck owns the enclosing test command and declared JUnit directory. This
-//! binary owns only validation, staging, reuse-build metadata, the single
-//! nextest list/run lifecycle, and unchanged JUnit publication.
+//! binary owns only validation, reuse-build metadata, the single nextest
+//! list/run lifecycle, and unchanged JUnit publication.
 use buck2_nextest_adapter_contract::{
     manifest_v2::{load_and_validate, ManifestV2},
     nextest_v2::{
@@ -484,40 +484,6 @@ fn source_for(source: &str, declared: &[PathBuf], cwd: &Path) -> Result<PathBuf,
     }
     Ok(matches.into_iter().next().unwrap())
 }
-fn stage_manifest(
-    root: &Path,
-    cwd: &Path,
-    manifest: &ManifestV2,
-    declared: &[PathBuf],
-) -> Result<(), String> {
-    let mut expected = BTreeSet::new();
-    for record in &manifest.records {
-        expected.insert(record.executable.source.clone());
-        for runtime in &record.runtime {
-            expected.insert(runtime.source.clone());
-        }
-    }
-    for source in &expected {
-        source_for(source, declared, cwd)?;
-    }
-    for record in &manifest.records {
-        let source = source_for(&record.executable.source, declared, cwd)?;
-        let destination = root.join(&record.executable.destination);
-        buck2_nextest_adapter_contract::nextest_v2::copy_regular(&source, &destination, true)?;
-        for runtime in &record.runtime {
-            let source = source_for(&runtime.source, declared, cwd)?;
-            buck2_nextest_adapter_contract::nextest_v2::copy_regular(
-                &source,
-                &root
-                    .join("workspace")
-                    .join(&record.cwd)
-                    .join(&runtime.destination),
-                false,
-            )?;
-        }
-    }
-    Ok(())
-}
 fn paths_overlap(left: &str, right: &str) -> bool {
     left == right
         || left.starts_with(&(right.to_owned() + "/"))
@@ -876,7 +842,7 @@ fn version_matches(text: &str) -> bool {
 }
 fn validate_list(
     stdout: &[u8],
-    expected: &BTreeMap<String, (String, String)>,
+    expected: &BTreeMap<String, (String, String, PathBuf)>,
 ) -> Result<(), String> {
     let text = std::str::from_utf8(stdout)
         .map_err(|e| format!("nextest list output is not UTF-8: {e}"))?;
@@ -917,7 +883,7 @@ fn validate_list(
                 "nextest list suite key {id} disagrees with binary-id {reported_id}"
             ));
         }
-        let (expected_name, expected_package) = expected
+        let (expected_name, expected_package, expected_path) = expected
             .get(id)
             .ok_or_else(|| format!("nextest list returned undeclared suite {id}"))?;
         for field in ["binary-name", "binary-path", "package-id", "cwd"] {
@@ -927,6 +893,7 @@ fn validate_list(
         }
         if object.get("binary-name").and_then(Value::as_str) != Some(expected_name)
             || object.get("package-id").and_then(Value::as_str) != Some(expected_package)
+            || object.get("binary-path").and_then(Value::as_str) != expected_path.to_str()
         {
             return Err(format!(
                 "nextest list suite {id} does not match synthesized package/binary metadata"
@@ -1072,53 +1039,36 @@ fn execute(args: Args) -> Result<i32, RunnerError> {
     for input in &inputs {
         buck2_nextest_adapter_contract::nextest_v2::regular(input, false)?;
     }
+    let mut executable_paths = BTreeMap::new();
+    for record in &manifest.records {
+        let id = record
+            .id
+            .as_deref()
+            .ok_or("validated record has no semantic ID")?;
+        let path = source_for(&record.executable.source, &args.declared_inputs, &cwd)?;
+        buck2_nextest_adapter_contract::nextest_v2::regular(&path, true)?;
+        if executable_paths.insert(id.to_owned(), path).is_some() {
+            return Err("duplicate resolved executable semantic ID".into());
+        }
+    }
     let root = private_root(&cwd)?;
     let execution = (|| -> Result<(i32, Option<PathBuf>), ProcessFailure> {
-        stage_manifest(&root, &cwd, &manifest, &args.declared_inputs)?;
         ensure_dir(&root.join("home"))?;
         ensure_dir(&root.join("cargo-home"))?;
         ensure_dir(&root.join("tmp"))?;
         let generated = synthesize(
             &root,
             &manifest,
+            &executable_paths,
             &args.profile,
             &args.report_skipped,
             args.timeout,
         )?;
-        for record in &manifest.records {
-            let id = record
-                .id
-                .as_deref()
-                .ok_or("validated record has no semantic ID")?;
-            let source = source_for(&record.executable.source, &args.declared_inputs, &cwd)?;
-            let destination = generated
-                .staged_binaries
-                .get(id)
-                .ok_or("synthesized binary is missing")?;
-            buck2_nextest_adapter_contract::nextest_v2::copy_regular(&source, destination, true)?;
-            for runtime in &record.runtime {
-                let source = source_for(&runtime.source, &args.declared_inputs, &cwd)?;
-                buck2_nextest_adapter_contract::nextest_v2::copy_regular(
-                    &source,
-                    &root
-                        .join("workspace")
-                        .join(&record.cwd)
-                        .join(&runtime.destination),
-                    false,
-                )?;
-            }
-        }
         let base = args.nextest.as_ref().unwrap();
         let mut version = base.to_vec();
         version.push("nextest".into());
         version.push("--version".into());
-        let mut manifest_paths = BTreeSet::new();
-        for record in &manifest.records {
-            manifest_paths.insert(record.executable.destination.clone());
-            for runtime in &record.runtime {
-                manifest_paths.insert(format!("workspace/{}/{}", record.cwd, runtime.destination));
-            }
-        }
+        let manifest_paths = BTreeSet::new();
         let (bundle_env, bundle_pairs) = parse_bundle(
             args.bundle_json.as_deref(),
             &args.bundle_resources,
@@ -1298,12 +1248,17 @@ mod tests {
     #[test]
     fn list_validation_requires_exact_declared_ids() {
         let mut expected = BTreeMap::new();
-        expected.insert("id".into(), ("test".into(), "package".into()));
+        expected.insert(
+            "id".into(),
+            ("test".into(), "package".into(), PathBuf::from("/tmp/test")),
+        );
         assert!(validate_list(br#"{"rust-suites":{"id":{"binary-id":"id","binary-name":"test","binary-path":"/tmp/test","package-id":"package","cwd":"/tmp/package","testcases":{}}}}
 "#, &expected).is_ok());
         assert!(validate_list(br#"{"rust-suites":{"other":{"binary-id":"other","binary-name":"test","binary-path":"/tmp/test","package-id":"package","cwd":"/tmp/package","testcases":{}}}}
 "#, &expected).is_err());
         assert!(validate_list(br#"{"rust-suites":{"id":{"binary-id":"id","binary-name":"wrong","binary-path":"/tmp/test","package-id":"package","cwd":"/tmp/package","testcases":{}}}}
+"#, &expected).is_err());
+        assert!(validate_list(br#"{"rust-suites":{"id":{"binary-id":"id","binary-name":"test","binary-path":"/tmp/other","package-id":"package","cwd":"/tmp/package","testcases":{}}}}
 "#, &expected).is_err());
     }
 }

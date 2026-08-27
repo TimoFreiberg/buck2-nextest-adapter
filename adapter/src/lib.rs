@@ -14,10 +14,9 @@ pub use error::{ContractError, ContractResult};
 #[cfg(test)]
 mod contract_tests {
     use super::manifest_v2::*;
-    fn path(source: &str, destination: &str) -> PathRecord {
+    fn path(source: &str) -> PathRecord {
         PathRecord {
             source: source.into(),
-            destination: destination.into(),
             kind: "regular_file".into(),
         }
     }
@@ -28,9 +27,7 @@ mod contract_tests {
             binary_identity: binary.into(),
             display_name: binary.into(),
             target_kind: "test".into(),
-            executable: path("bin/source", "work/bin/test"),
-            runtime: vec![],
-            generated_outputs: vec![],
+            executable: path("bin/source"),
             cwd: "work".into(),
             platform: "x86_64-unknown-linux-gnu".into(),
             id: None,
@@ -76,7 +73,7 @@ mod contract_tests {
         nested.binary_identity = "two".into();
         nested.display_name = "two".into();
         nested.cwd = "work/nested".into();
-        nested.executable = path("bin/source-two", "work/nested/bin/test");
+        nested.executable = path("bin/source-two");
         assert!(ManifestV2 {
             schema_version: 2,
             records: vec![record("one"), nested],
@@ -84,18 +81,28 @@ mod contract_tests {
         .validate()
         .is_err());
 
-        let mut cwd_overlaps_destination = record("two");
-        cwd_overlaps_destination.package_identity = "other".into();
-        cwd_overlaps_destination.binary_identity = "two".into();
-        cwd_overlaps_destination.display_name = "two".into();
-        cwd_overlaps_destination.cwd = "work/bin".into();
-        cwd_overlaps_destination.executable = path("bin/source-two", "work/bin/test-two");
+        let mut second_record = record("two");
+        second_record.package_identity = "other".into();
+        second_record.binary_identity = "two".into();
+        second_record.display_name = "two".into();
+        second_record.cwd = "work/bin".into();
+        second_record.executable = path("bin/source-two");
         assert!(ManifestV2 {
             schema_version: 2,
-            records: vec![record("one"), cwd_overlaps_destination],
+            records: vec![record("one"), second_record],
         }
         .validate()
         .is_err());
+    }
+
+    #[test]
+    fn schema_v2_rejects_removed_runtime_and_generated_output_fields() {
+        for field in ["runtime", "generated_outputs"] {
+            let json = format!(
+                r#"{{"schema_version":2,"records":[{{"package_identity":"pkg","owner_label":"//tests:unit","binary_identity":"one","display_name":"one","target_kind":"test","executable":{{"source":"bin/source","kind":"regular_file"}},"{field}":[],"cwd":"work","platform":"x86_64-unknown-linux-gnu"}}]}}"#
+            );
+            assert!(serde_json::from_str::<ManifestV2>(&json).is_err(), "{field} must remain unknown");
+        }
     }
 
     #[test]
@@ -111,7 +118,7 @@ mod contract_tests {
             .unwrap()
             .starts_with("b2n1:"));
         let mut duplicate = record("two");
-        duplicate.executable.destination = "bin/test".into();
+        duplicate.executable = path("bin/source-two");
         assert!(ManifestV2 {
             schema_version: 2,
             records: vec![record("one"), duplicate]

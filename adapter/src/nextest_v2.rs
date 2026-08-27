@@ -165,13 +165,13 @@ pub struct Synthesized {
     pub config_file: PathBuf,
     pub junit: PathBuf,
     pub binary_ids: BTreeSet<String>,
-    pub list_expectations: BTreeMap<String, (String, String)>,
-    pub staged_binaries: BTreeMap<String, PathBuf>,
+    pub list_expectations: BTreeMap<String, (String, String, PathBuf)>,
 }
 
 pub fn synthesize(
     root: &Path,
     manifest: &ManifestV2,
+    executable_paths: &BTreeMap<String, PathBuf>,
     profile: &str,
     report_skipped: &str,
     timeout: u64,
@@ -180,8 +180,8 @@ pub fn synthesize(
     let target = root.join("target");
     let meta = root.join("meta");
     ensure_dir(&workspace)?;
+    ensure_dir(&target)?;
     ensure_dir(&meta)?;
-    ensure_dir(&target.join("debug"))?;
     ensure_dir(&workspace.join(".config"))?;
     let mut packages: BTreeMap<String, (String, String, Vec<(&GenericRecord, String)>)> =
         BTreeMap::new();
@@ -218,7 +218,6 @@ pub fn synthesize(
         format!("[workspace]\nresolver = \"2\"\nmembers = [\n{workspace_members_toml},\n]\n"),
     )
     .map_err(|e| e.to_string())?;
-    let mut staged_binaries = BTreeMap::new();
     let mut list_expectations = BTreeMap::new();
     for (_identity, (package_name, _package_dir, records)) in &packages {
         let package_root = workspace.join(&records[0].0.cwd);
@@ -233,13 +232,17 @@ pub fn synthesize(
         let mut targets = Vec::new();
         for (record, binary_name) in records {
             let id = record.id.as_deref().unwrap();
-            let staged = target.join("debug").join(binary_name);
+            let executable_path = executable_paths
+                .get(id)
+                .ok_or_else(|| format!("missing resolved executable path for {id}"))?;
             let src_path = package_root.join("src").join(format!("{binary_name}.rs"));
             File::create(&src_path).map_err(|e| e.to_string())?;
-            staged_binaries.insert(id.to_owned(), staged.clone());
-            list_expectations.insert(id.to_owned(), (binary_name.clone(), package_id.clone()));
+            list_expectations.insert(
+                id.to_owned(),
+                (binary_name.clone(), package_id.clone(), executable_path.clone()),
+            );
             targets.push(json!({"name": binary_name, "src_path": src_path, "kind":["test"], "crate_types":["bin"], "edition":"2021", "test":true, "doc":false, "doctest":false, "required-features":[]}));
-            binaries.insert(id.to_owned(), json!({"binary-id":id,"binary-name":binary_name,"binary-path":staged,"build-platform":"target","kind":"test","package-id":package_id,"cwd":package_root}));
+            binaries.insert(id.to_owned(), json!({"binary-id":id,"binary-name":binary_name,"binary-path":executable_path,"build-platform":"target","kind":"test","package-id":package_id,"cwd":package_root}));
         }
         cargo_packages.push(json!({"id":package_id,"name":package_name,"version":"0.1.0","source":null,"manifest_path":manifest_path,"edition":"2021","authors":[],"categories":[],"keywords":[],"dependencies":[],"features":{},"default_run":null,"description":null,"documentation":null,"homepage":null,"license":null,"license_file":null,"links":null,"metadata":null,"publish":null,"readme":null,"repository":null,"rust_version":null,"targets":targets}));
         nodes.push(json!({"id":package_id,"dependencies":[],"deps":[],"features":[]}));
@@ -277,7 +280,6 @@ pub fn synthesize(
         junit,
         binary_ids: ids,
         list_expectations,
-        staged_binaries,
     })
 }
 

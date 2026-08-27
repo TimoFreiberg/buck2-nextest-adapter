@@ -1,5 +1,6 @@
 load("@prelude//test:inject_test_run_info.bzl", "inject_test_run_info")
 load("@toolchains//:nextest.bzl", "NextestBuckToolchainInfo", "nextest_bundle_json")
+load("@prelude//dist:dist_info.bzl", "DistInfo")
 
 def _is_canonical_owner_label(value):
     if not value.startswith("//") or " " in value or "\t" in value or "\n" in value:
@@ -60,8 +61,7 @@ NextestBuckTestBinaryInfo = provider(
         "display_name",
         "target_kind",
         "executable",
-        "runtime",
-        "generated_outputs",
+        "runtime_files",
         "cwd",
         "platform",
     ],
@@ -74,29 +74,21 @@ def _nextest_buck_test_binary_impl(ctx):
     outputs = ctx.attrs.executable[DefaultInfo].default_outputs
     if len(outputs) != 1:
         fail("nextest_buck_test_binary executable must provide exactly one default output")
-    if len(ctx.attrs.runtime) != len(ctx.attrs.runtime_destinations):
-        fail("runtime and runtime_destinations must have the same length")
-    runtime = []
-    for dependency, destination in zip(ctx.attrs.runtime, ctx.attrs.runtime_destinations):
-        dependency_outputs = dependency[DefaultInfo].default_outputs
-        if len(dependency_outputs) != 1:
-            fail("each nextest_buck_test_binary runtime dependency must provide exactly one output")
-        runtime.append({"source": dependency_outputs[0], "destination": destination, "kind": "regular_file"})
     executable = outputs[0]
+    runtime_files = ctx.attrs.executable[DistInfo].nondebug_runtime_files
     if executable.is_source:
         fail("nextest_buck_test_binary executable must be a Buck-produced regular file")
     return [
         DefaultInfo(default_output = executable),
-        RunInfo(args = ctx.attrs.executable[RunInfo].args),
+        RunInfo(args = cmd_args(executable, hidden = runtime_files)),
         NextestBuckTestBinaryInfo(
             package_identity = ctx.attrs.package_identity,
             owner_label = ctx.attrs.owner_label,
             binary_identity = ctx.attrs.binary_identity,
             display_name = ctx.attrs.display_name,
             target_kind = ctx.attrs.target_kind,
-            executable = {"source": executable, "destination": ctx.attrs.executable_destination, "kind": "regular_file"},
-            runtime = runtime,
-            generated_outputs = [],
+            executable = {"source": executable, "kind": "regular_file"},
+            runtime_files = runtime_files,
             cwd = ctx.attrs.cwd,
             platform = ctx.attrs.platform,
         ),
@@ -106,15 +98,12 @@ def _nextest_buck_test_binary_impl(ctx):
 nextest_buck_test_binary = rule(
     impl = _nextest_buck_test_binary_impl,
     attrs = {
-        "executable": attrs.exec_dep(providers = [DefaultInfo, RunInfo]),
-        "runtime": attrs.list(attrs.exec_dep(providers = [DefaultInfo]), default = []),
-        "runtime_destinations": attrs.list(attrs.string(), default = []),
+        "executable": attrs.exec_dep(providers = [DefaultInfo, RunInfo, DistInfo]),
         "package_identity": attrs.string(),
         "owner_label": attrs.string(),
         "binary_identity": attrs.string(),
         "display_name": attrs.string(),
         "target_kind": attrs.string(default = "test"),
-        "executable_destination": attrs.string(),
         "cwd": attrs.string(),
         "platform": attrs.string(),
     },
@@ -154,13 +143,6 @@ def _nextest_buck_test_impl(ctx):
         if record.cwd in cwd_packages and cwd_packages[record.cwd] != record.package_identity:
             fail("nextest_buck_test cwd must map to one package_identity")
         cwd_packages[record.cwd] = record.package_identity
-        manifest_runtime = []
-        for runtime in record.runtime:
-            manifest_runtime.append({
-                "source": runtime["source"].short_path,
-                "destination": runtime["destination"],
-                "kind": runtime["kind"],
-            })
         manifest_records.append({
             "package_identity": record.package_identity,
             "owner_label": record.owner_label,
@@ -169,11 +151,8 @@ def _nextest_buck_test_impl(ctx):
             "target_kind": record.target_kind,
             "executable": {
                 "source": executable_source,
-                "destination": record.executable["destination"],
                 "kind": record.executable["kind"],
             },
-            "runtime": manifest_runtime,
-            "generated_outputs": record.generated_outputs,
             "cwd": record.cwd,
             "platform": record.platform,
         })
@@ -184,8 +163,6 @@ def _nextest_buck_test_impl(ctx):
     declared_inputs = []
     for record in records:
         declared_inputs.extend(["--declared-input", record.executable["source"]])
-        for runtime in record.runtime:
-            declared_inputs.extend(["--declared-input", runtime["source"]])
     toolchain = ctx.attrs._nextest_toolchain[NextestBuckToolchainInfo]
     bundle_resources = toolchain.bundle_resources
     bundle_json = nextest_bundle_json(
@@ -231,9 +208,8 @@ def _nextest_buck_test_impl(ctx):
             record.executable["source"]
             for record in records
         ] + [
-            runtime["source"]
+            record.runtime_files
             for record in records
-            for runtime in record.runtime
         ],
     )
     return inject_test_run_info(

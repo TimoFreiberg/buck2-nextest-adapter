@@ -167,9 +167,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_accepts_repeated_declared_inputs_for_shared_closure_files() {
-        // The Buck rule declares the same runtime closure file once per
-        // consuming record, so repeated --declared-input values are valid.
+    fn parse_accepts_repeated_declared_inputs_for_multiple_executables() {
+        // Each consuming record contributes its executable as a declared input.
         let args = parse(&[
             "--manifest",
             "manifest.json",
@@ -178,9 +177,7 @@ mod tests {
             "--declared-input",
             "executable",
             "--declared-input",
-            "runtime/resource",
-            "--declared-input",
-            "runtime/resource",
+            "executable-two",
         ])
         .unwrap();
         assert_eq!(args.declared_inputs.len(), 3);
@@ -230,9 +227,7 @@ mod tests {
                         "binary_identity": "one",
                         "display_name": "one",
                         "target_kind": "test",
-                        "executable": {"source": "bin/source-one", "destination": "work/bin/one", "kind": "regular_file"},
-                        "runtime": [],
-                        "generated_outputs": [],
+                        "executable": {"source": "bin/source-one", "kind": "regular_file"},
                         "cwd": "work",
                         "platform": "x86_64-unknown-linux-gnu"
                     },
@@ -242,9 +237,7 @@ mod tests {
                         "binary_identity": "two",
                         "display_name": "two",
                         "target_kind": "test",
-                        "executable": {"source": "bin/source-two", "destination": "other-work/two/bin/two", "kind": "regular_file"},
-                        "runtime": [],
-                        "generated_outputs": [],
+                        "executable": {"source": "bin/source-two", "kind": "regular_file"},
                         "cwd": "other-work/two",
                         "platform": "x86_64-unknown-linux-gnu"
                     }
@@ -270,7 +263,7 @@ mod tests {
         let manifest_path = dir.path().join("manifest.json");
         fs::write(
             &manifest_path,
-            r#"{"schema_version":2,"schema_version":2,"records":[{"package_identity":"alpha","owner_label":"//tests:unit","binary_identity":"one","display_name":"one","target_kind":"test","executable":{"source":"bin/source-one","destination":"bin/one","kind":"regular_file"},"runtime":[],"generated_outputs":[],"cwd":"work","platform":"x86_64-unknown-linux-gnu","environment":{}}]}"#,
+            r#"{"schema_version":2,"schema_version":2,"records":[{"package_identity":"alpha","owner_label":"//tests:unit","binary_identity":"one","display_name":"one","target_kind":"test","executable":{"source":"bin/source-one","kind":"regular_file"},"cwd":"work","platform":"x86_64-unknown-linux-gnu","environment":{}}]}"#,
         )
         .unwrap();
         assert!(load_and_validate(&manifest_path).is_err());

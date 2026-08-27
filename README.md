@@ -1,6 +1,6 @@
 # Buck2/nextest artifact handoff
 
-This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds a native Rust test executable and emits a strict serialized manifest. The Rust adapter stages only those declared inputs, synthesizes the documented Cargo/nextest metadata shape, runs the declared nextest launcher, and exports nextest's JUnit XML before removing its private root.
+This repository proves a local Buck2-to-nextest boundary. Buck2 builds native Rust test executables and owns their runtime closure through the bundled prelude's `DistInfo.nondebug_runtime_files`; the Rust adapter runs each declared executable from Buck's native materialization, synthesizes the documented Cargo/nextest metadata shape, runs the declared nextest launcher, and exports nextest's JUnit XML before removing its private writable root.
 
 ## Prerequisites
 
@@ -76,27 +76,34 @@ executor exports the declared report to the caller.
 vertical slice, backed by the pinned Buck2 `ExternalRunnerTestInfo` API:
 
 ```text
-nextest_buck_test_binary (one declared executable + explicit regular-file closure)
+nextest_buck_test_binary (one Rust executable exposing DistInfo)
   -> nextest_buck_test (one top-level Buck suite, one ExternalRunnerTestInfo command)
        -> nextest_buck_test Rust runner
             -> declared cargo-nextest 0.9.143 list/run
                  -> one unchanged JUnit report
 ```
 
-Buck owns the enclosing command, declared inputs, resource limits, status,
-diagnostics, cancellation, and declared JUnit directory. Nextest owns test
-discovery, per-test process execution, scheduling, and JUnit generation. The
-runner never invokes Cargo or rustc, enumerates individual tests, parses human
-output, uses PATH or runtime network access, or consumes a checked-in test-name
-list. It checks each scratch-parent component for symlinks before creating its
+Buck owns the enclosing command, executable/runtime materialization, resource
+limits, status, diagnostics, cancellation, and declared JUnit directory. A Rust
+executable's `DistInfo.nondebug_runtime_files` is the authoritative runtime-file
+closure; consumers do not enumerate destinations. Declared executables and
+provider runtime files are read-only inputs to the runner, while synthetic
+Cargo/nextest metadata and other writable state stay under its private scratch
+root. Suite environment and platform identity remain explicit in this slice.
+Nextest owns test discovery, per-test process execution, scheduling, and JUnit
+generation. The runner never invokes Cargo or rustc, enumerates individual tests,
+parses human output, uses PATH or runtime network access, or consumes a
+checked-in test-name list. It checks each scratch-parent component for symlinks before creating its
 private child, but the portable path API cannot make validation and creation a
 single dirfd-atomic operation; this remains a residual TOCTOU limitation, not a
 race-free guarantee.
 
 `buck-artifact` remains the separate build-action adapter mode:
 
-`just ci` runs the relocated artifact check and the real declared nextest
-production check as repository-level checks, not nested `sh_test`s. Missing
+`just ci` runs the relocated artifact check, the generated-resource runtime
+closure check, the provider/action contract, the schema-v2 native-materialization
+relocation check, and the real declared nextest production check as repository-level
+checks, not nested `sh_test`s. Missing
 relocation or host/process-inspection prerequisites fail CI with diagnostics
 before Buck or adapter dispatch. The supported production test hosts are Linux
 x86_64/aarch64 and macOS x86_64/arm64; the macOS tool is the universal archive.
@@ -186,7 +193,7 @@ buck2 test --test-executor-stdout=- --test-executor-stderr=- //:legacy_path_abse
 buck2 test --test-executor-stdout=- --test-executor-stderr=- //:documentation_smoke
 ```
 
-The pass test also proves manifest-driven cwd/environment, runtime staging, source denial/no nested build, executable digest equality, and once-only private-root cleanup. Destination tests prove pre-dispatch rejection, existing-file replacement, paths with spaces, byte-identical pass-through, and status-3 precedence for forced export failures after raw `0` and `100`.
+The pass test also proves manifest-driven cwd/environment, source denial/no nested build, executable digest equality, and once-only private-root cleanup. The production `buck2_nextest_runtime_closure` check additionally proves that a Buck-generated Rust resource attached through `resources` is available through `DistInfo.nondebug_runtime_files`, while an otherwise identical target without that edge fails in the named testcase and publishes a normal JUnit failure. Destination tests prove pre-dispatch rejection, existing-file replacement, paths with spaces, byte-identical pass-through, and status-3 precedence for forced export failures after raw `0` and `100`.
 
 ## Manifest and baseline distinction
 

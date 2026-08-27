@@ -102,7 +102,6 @@ pub fn decode_semantic_id(value: &str) -> ContractResult<(String, String, String
 #[serde(deny_unknown_fields)]
 pub struct PathRecord {
     pub source: String,
-    pub destination: String,
     pub kind: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -114,8 +113,6 @@ pub struct GenericRecord {
     pub display_name: String,
     pub target_kind: String,
     pub executable: PathRecord,
-    pub runtime: Vec<PathRecord>,
-    pub generated_outputs: Vec<String>,
     pub cwd: String,
     pub platform: String,
     #[serde(default)]
@@ -191,7 +188,6 @@ impl ManifestV2 {
                 ));
             }
         }
-        let mut destinations: Vec<(String, String)> = Vec::new();
         let mut package_cwds = BTreeMap::new();
         let mut cwd_packages = BTreeMap::new();
         let mut normalized = Vec::new();
@@ -228,38 +224,13 @@ impl ManifestV2 {
                     ));
                 }
             }
-            let mut paths = Vec::new();
-            safe_path(&record.executable.destination, "executable.destination")?;
             if record.executable.kind != "regular_file" {
                 return Err(ContractError::invalid(
                     "executable must be a unique regular file",
                 ));
             }
-            paths.push(record.executable.destination.clone());
-            let mut runtime = Vec::new();
-            for item in &record.runtime {
-                safe_path(&item.source, "runtime.source")?;
-                safe_path(&item.destination, "runtime.destination")?;
-                if item.kind != "regular_file" || executable_sources.contains(&item.source) {
-                    return Err(ContractError::invalid(
-                        "runtime entries must be regular files distinct from executables",
-                    ));
-                }
-                paths.push(item.destination.clone());
-                runtime.push(item.clone());
-            }
             safe_path(&record.cwd, "cwd")?;
             safe_toml_path(&record.cwd, "cwd")?;
-            if record.cwd != record.executable.destination
-                && !record
-                    .executable
-                    .destination
-                    .starts_with(&(record.cwd.clone() + "/"))
-            {
-                return Err(ContractError::invalid(
-                    "executable destination must be inside the package cwd",
-                ));
-            }
             if let Some(previous) =
                 package_cwds.insert(record.package_identity.clone(), record.cwd.clone())
             {
@@ -285,30 +256,6 @@ impl ManifestV2 {
                     ));
                 }
             }
-            if destinations.iter().any(|(path, package)| {
-                package != &record.package_identity && overlaps(path, &record.cwd)
-            }) {
-                return Err(ContractError::invalid(
-                    "package cwd overlaps a destination from another package",
-                ));
-            }
-            for path in &paths {
-                if path == "manifest.json"
-                    || path.starts_with("manifest.json/")
-                    || destinations.iter().any(|(old, _)| overlaps(old, path))
-                    || package_cwds.iter().any(|(package, cwd)| {
-                        package != &record.package_identity && overlaps(cwd, path)
-                    })
-                {
-                    return Err(ContractError::invalid(
-                        "manifest paths overlap or are adapter-owned",
-                    ));
-                }
-                destinations.push((path.clone(), record.package_identity.clone()));
-            }
-            if record.generated_outputs.len() > 0 {
-                return Err(ContractError::invalid("generated outputs are unsupported"));
-            }
             if record.platform.is_empty() || record.platform.chars().any(char::is_whitespace) {
                 return Err(ContractError::invalid(
                     "platform must be opaque and whitespace-free",
@@ -316,7 +263,6 @@ impl ManifestV2 {
             }
             normalized.push(GenericRecord {
                 id: Some(id),
-                runtime,
                 ..record.clone()
             });
         }

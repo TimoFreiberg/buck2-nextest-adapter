@@ -503,7 +503,6 @@ GENERIC_ID_PREFIX = "b2n1:"
 _ID_UNRESERVED = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
 _GENERIC_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z", re.ASCII)
 _GENERIC_OWNER_LABEL = re.compile(r"//(?:[^/\s:]+/)*[^/\s]+(?::[^/\s]+)?\Z", re.ASCII)
-_GENERIC_RESERVED_PATHS = frozenset(ADAPTER_OWNED_PATHS)
 _GENERIC_RESERVED_ENVIRONMENT_NAMES = frozenset(RESERVED_ENVIRONMENT_NAMES)
 
 
@@ -601,8 +600,6 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
         die("generic manifest.records must not be empty")
     identities = set()
     executable_sources = set()
-    destinations = {}
-    destination_names = {}
     package_cwds = {}
     cwd_packages = {}
     normalized = []
@@ -610,7 +607,7 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
         prefix = f"records[{index}]"
         if not isinstance(record, dict):
             die(f"{prefix} must be an object")
-        required = {"package_identity", "owner_label", "binary_identity", "display_name", "target_kind", "executable", "runtime", "generated_outputs", "cwd", "platform"}
+        required = {"package_identity", "owner_label", "binary_identity", "display_name", "target_kind", "executable", "cwd", "platform"}
         if set(record) != required:
             die(f"{prefix} fields must be exactly {sorted(required)}; record-level environment is unsupported")
         package = expect(record["package_identity"], str, f"{prefix}.package_identity")
@@ -628,34 +625,14 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
         identities.add(identity)
         generated_id = semantic_id(*identity)
         executable = expect(record["executable"], dict, f"{prefix}.executable")
-        if set(executable) != {"source", "destination", "kind"}:
+        if set(executable) != {"source", "kind"}:
             die(f"{prefix}.executable fields are invalid")
         source = _generic_safe_relative_path(executable["source"], f"{prefix}.executable.source")
-        destination = _generic_safe_relative_path(executable["destination"], f"{prefix}.executable.destination")
         if executable["kind"] != "regular_file":
             die(f"{prefix}.executable must be a regular_file")
         if source in executable_sources:
             die(f"executable is attached to more than one record: {source}")
         executable_sources.add(source)
-        paths = [(destination, f"{prefix}.executable.destination")]
-        runtime = expect(record["runtime"], list, f"{prefix}.runtime")
-        runtime_records = []
-        for runtime_index, item in enumerate(runtime):
-            item_name = f"{prefix}.runtime[{runtime_index}]"
-            item = expect(item, dict, item_name)
-            if set(item) != {"source", "destination", "kind"}:
-                die(f"{item_name} fields are invalid")
-            item_source = _generic_safe_relative_path(item["source"], f"{item_name}.source")
-            item_destination = _generic_safe_relative_path(item["destination"], f"{item_name}.destination")
-            if item["kind"] != "regular_file":
-                die(f"{item_name} must be a regular_file; symlinks and trees are unsupported")
-            if item_source in executable_sources:
-                die(f"runtime source is also an executable: {item_source}")
-            runtime_records.append({"source": item_source, "destination": item_destination, "kind": item["kind"]})
-            paths.append((item_destination, item_name + ".destination"))
-        generated = expect(record["generated_outputs"], list, f"{prefix}.generated_outputs")
-        if generated:
-            die(f"{prefix}.generated_outputs are unsupported until their timing is proven")
         cwd = _generic_toml_safe_path(record["cwd"], f"{prefix}.cwd")
         if package in package_cwds and package_cwds[package] != cwd:
             die(f"{prefix}.cwd conflicts with the package cwd")
@@ -667,20 +644,7 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
                 die(f"{prefix}.cwd maps to more than one package identity")
             cwd_packages[cwd] = package
         package_cwds[package] = cwd
-        if any(other_package != package and _generic_path_prefix(cwd, path) for path, other_package in destinations.items()):
-            die(f"{prefix}.cwd overlaps a destination from another package")
-        for left_index, (left, left_name) in enumerate(paths):
-            if left in destinations:
-                die(f"duplicate destination {left}: {left_name} and {destination_names[left]}")
-            if left in _GENERIC_RESERVED_PATHS or _generic_path_prefix(left, "manifest.json"):
-                die(f"{left_name} conflicts with an adapter-owned path: {left}")
-            if any(other_package != package and _generic_path_prefix(left, other_cwd) for other_package, other_cwd in package_cwds.items()):
-                die(f"{left_name} overlaps a package cwd from another package")
-            destinations[left] = package
-            destination_names[left] = left_name
-            for right, right_name in paths[:left_index]:
-                if _generic_path_prefix(left, right):
-                    die(f"path-prefix overlap between {left_name} and {right_name}")
+
         platform_identity = expect(record["platform"], str, f"{prefix}.platform")
         if not platform_identity or "\x00" in platform_identity or any(char.isspace() for char in platform_identity):
             die(f"{prefix}.platform must be a non-empty opaque identity without whitespace")
@@ -691,41 +655,11 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
             "display_name": display,
             "target_kind": kind,
             "id": generated_id,
-            "executable": {"source": source, "destination": destination, "kind": executable["kind"]},
-            "runtime": runtime_records,
-            "generated_outputs": [],
+            "executable": {"source": source, "kind": executable["kind"]},
             "cwd": cwd,
             "platform": platform_identity,
         })
     return {"schema_version": GENERIC_SCHEMA_VERSION, "records": normalized}
-
-
-def generic_metadata(records: list[dict[str, Any]], workspace: Path, target: Path) -> dict[str, Any]:
-    packages = {}
-    suites = {}
-    for record in records:
-        package_id = semantic_id(record["package_identity"], record["owner_label"], "package")
-        binary_id = record["id"]
-        packages.setdefault(package_id, {"id": package_id, "name": record["package_identity"], "target_kind": record["target_kind"]})
-        suites[binary_id] = {
-            "binary-id": binary_id,
-            "binary-name": record["display_name"],
-            "binary-path": str(workspace / record["executable"]["destination"]),
-            "build-platform": record["platform"],
-            "cwd": str(workspace / record["cwd"]),
-            "kind": record["target_kind"],
-            "package-id": package_id,
-            "package-name": record["package_identity"],
-            "status": "listed",
-            "testcases": {},
-        }
-    build_meta = {"target-directory": str(target), "platforms": {}}
-    return {"schema_version": GENERIC_SCHEMA_VERSION, "packages": list(packages.values()), "binaries": suites, "tests": {"rust-build-meta": build_meta, "rust-suites": suites, "test-count": 0}}
-
-
-def emit_generic_metadata(args: argparse.Namespace) -> None:
-    manifest = validate_generic_manifest(Path(args.manifest))
-    write_json(Path(args.output), generic_metadata(manifest["records"], Path(args.workspace).resolve(), Path(args.target).resolve()))
 
 
 def main() -> None:
@@ -754,12 +688,6 @@ def main() -> None:
     p.add_argument("--manifest", required=True)
     p.add_argument("--manifest-root", required=True)
     p.set_defaults(func=synthetic_metadata)
-    p = sub.add_parser("emit-generic-metadata")
-    p.add_argument("--manifest", required=True)
-    p.add_argument("--workspace", required=True)
-    p.add_argument("--target", required=True)
-    p.add_argument("--output", required=True)
-    p.set_defaults(func=emit_generic_metadata)
     p = sub.add_parser("decode-semantic-id")
     p.add_argument("value")
     p.set_defaults(func=lambda args: print(json.dumps(decode_semantic_id(args.value), ensure_ascii=False)))

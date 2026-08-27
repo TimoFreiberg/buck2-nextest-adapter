@@ -146,6 +146,27 @@ rust_test(
 )
 
 genrule(
+    name = "nextest_generated_rust_runtime_resource",
+    out = "nextest-generated-rust-runtime-resource.txt",
+    cmd = "printf '%s\\n' 'buck2-nextest-generated-runtime-resource-v1' > $OUT",
+)
+
+rust_test(
+    name = "buck2_nextest_runtime_resource_positive_executable",
+    srcs = ["nextest_runtime_resource_fixture.rs"],
+    crate_root = "nextest_runtime_resource_fixture.rs",
+    deps = ["//third-party:serde_json"],
+    resources = [":nextest_generated_rust_runtime_resource"],
+)
+
+rust_test(
+    name = "buck2_nextest_runtime_resource_negative_executable",
+    srcs = ["nextest_runtime_resource_fixture.rs"],
+    crate_root = "nextest_runtime_resource_fixture.rs",
+    deps = ["//third-party:serde_json"],
+)
+
+genrule(
     name = "buck2_nextest_artifact_manifest",
     out = "artifact-manifest.json",
     cmd = "$(location :nextest_buck_artifact_runner) emit-manifest --artifact $(location :buck2_nextest_rust_test) --runtime-input runtime/buck2_artifact_runtime.txt --runtime-source $(source runtime/buck2_artifact_runtime.txt) --output $OUT",
@@ -187,13 +208,10 @@ genrule(
 nextest_buck_test_binary(
     name = "nextest_buck_test_binary_alpha",
     executable = ":buck2_nextest_v2_rust_test_alpha",
-    runtime = [":runtime_resource"],
-    runtime_destinations = ["runtime/alpha.txt"],
     package_identity = "demo-package",
     owner_label = "//:demo_tests",
     binary_identity = "alpha",
     display_name = "same-display-name",
-    executable_destination = "work/bin/alpha",
     cwd = "work",
     platform = select({
         "ovr_config//os:linux": select({
@@ -213,13 +231,10 @@ nextest_buck_test_binary(
 nextest_buck_test_binary(
     name = "nextest_buck_test_binary_beta",
     executable = ":buck2_nextest_v2_rust_test_beta",
-    runtime = [":runtime_resource"],
-    runtime_destinations = ["runtime/beta.txt"],
     package_identity = "demo-package",
     owner_label = "//:demo_tests",
     binary_identity = "beta",
     display_name = "same-display-name",
-    executable_destination = "work/bin/beta",
     cwd = "work",
     platform = select({
         "ovr_config//os:linux": select({
@@ -239,13 +254,10 @@ nextest_buck_test_binary(
 nextest_buck_test_binary(
     name = "nextest_buck_test_binary_gamma",
     executable = ":buck2_nextest_rust_test_gamma",
-    runtime = [":runtime_resource"],
-    runtime_destinations = ["runtime/gamma.txt"],
     package_identity = "other-demo-package",
     owner_label = "//:other_demo_tests",
     binary_identity = "gamma",
     display_name = "same-display-name",
-    executable_destination = "other-work/bin/gamma",
     cwd = "other-work",
     platform = select({
         "ovr_config//os:linux": select({
@@ -266,6 +278,75 @@ nextest_buck_test(
     name = "nextest_buck_test_generic_multi_binary",
     records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta", ":nextest_buck_test_binary_gamma"],
     env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
+)
+
+nextest_buck_test_binary(
+    name = "nextest_buck_test_binary_runtime_invalid",
+    executable = ":nextest-cargo-nextest-v2-executable",
+    package_identity = "invalid",
+    owner_label = "//:invalid",
+    binary_identity = "provider",
+    display_name = "invalid",
+    cwd = "work",
+    platform = "invalid-platform",
+)
+
+nextest_buck_test_binary(
+    name = "nextest_buck_test_binary_runtime_positive",
+    executable = ":buck2_nextest_runtime_resource_positive_executable",
+    package_identity = "runtime",
+    owner_label = "//:runtime",
+    binary_identity = "positive",
+    display_name = "provider-runtime-resource",
+    cwd = "work",
+    platform = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": "x86_64-unknown-linux-gnu",
+            "ovr_config//cpu:arm64": "aarch64-unknown-linux-gnu",
+            "DEFAULT": "unsupported",
+        }),
+        "ovr_config//os:macos": select({
+            "ovr_config//cpu:x86_64": "x86_64-apple-darwin",
+            "ovr_config//cpu:arm64": "aarch64-apple-darwin",
+            "DEFAULT": "unsupported",
+        }),
+        "DEFAULT": "unsupported",
+    }),
+)
+
+nextest_buck_test_binary(
+    name = "nextest_buck_test_binary_runtime_negative",
+    executable = ":buck2_nextest_runtime_resource_negative_executable",
+    package_identity = "runtime",
+    owner_label = "//:runtime",
+    binary_identity = "negative",
+    display_name = "provider-runtime-resource",
+    cwd = "work",
+    platform = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": "x86_64-unknown-linux-gnu",
+            "ovr_config//cpu:arm64": "aarch64-unknown-linux-gnu",
+            "DEFAULT": "unsupported",
+        }),
+        "ovr_config//os:macos": select({
+            "ovr_config//cpu:x86_64": "x86_64-apple-darwin",
+            "ovr_config//cpu:arm64": "aarch64-apple-darwin",
+            "DEFAULT": "unsupported",
+        }),
+        "DEFAULT": "unsupported",
+    }),
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_runtime_closure_positive",
+    records = [":nextest_buck_test_binary_runtime_positive"],
+    filter = "test(=provider_runtime_resource_case)",
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_runtime_closure_negative",
+    records = [":nextest_buck_test_binary_runtime_negative"],
+    filter = "test(=provider_runtime_resource_case)",
 )
 
 nextest_buck_test(
@@ -322,6 +403,23 @@ sh_test(
         ":nextest_buck_test_binary_alpha",
         ":nextest_buck_test_binary_beta",
     ],
+)
+
+sh_test(
+    name = "buck2_nextest_runtime_closure_fixture_unit",
+    test = "tools/runtime_closure_fixture_unit.py",
+    args = [
+        "$(location :buck2_nextest_runtime_resource_positive_executable)",
+        "$(location :buck2_nextest_runtime_resource_negative_executable)",
+    ],
+    resources = ["tools/runtime_closure_fixture_unit.py", ":buck2_nextest_runtime_resource_positive_executable", ":buck2_nextest_runtime_resource_negative_executable"],
+)
+
+sh_test(
+    name = "buck2_nextest_runtime_provider_fixture_contract",
+    test = "tools/runtime_provider_fixture_contract.sh",
+    args = ["$(location :buck2_nextest_runtime_resource_positive_executable)"],
+    resources = ["tools/runtime_provider_fixture_contract.sh", ":buck2_nextest_runtime_resource_positive_executable"],
 )
 
 sh_test(
@@ -625,6 +723,10 @@ sh_test(
         "tools/parse_buck_freshness_events.py",
         "tools/test_external_test_surface.py",
         "tools/test_semantic_contract.py",
+        "buck2_nextest_runtime_provider_contract.py",
+        "nextest_buck_test_relocated_sanitized.sh",
+        "buck2_nextest_runtime_closure.sh",
+        "tools/runtime_provider_fixture_contract.sh",
         "scenario_removed.sh",
     ],
 )

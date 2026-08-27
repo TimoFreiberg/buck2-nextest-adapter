@@ -39,12 +39,12 @@ grep -F 'worker-side execution' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'nextest_buck_artifact_remote_selftest' "$readme" >/dev/null
 ! grep -F 'local-only' "$readme" "$roadmap" >/dev/null
 grep -F 'BUCK_SCRATCH_PATH' "$readme" "$baseline" >/dev/null
-grep -F '`just ci` runs the relocated artifact check and the real declared nextest' "$readme" >/dev/null
+grep -F '`just ci` runs the relocated artifact check, the generated-resource runtime' "$readme" >/dev/null
 grep -F 'nextest_buck_test' "$readme" "$baseline" "$justfile" >/dev/null
 grep -F 'ExternalRunnerTestInfo' "$readme" "$baseline" >/dev/null
 grep -F 'b2n1:' "$baseline" >/dev/null
 grep -F 'process-inspection prerequisites fail' "$readme" >/dev/null
-grep -F 'production check as repository-level checks' "$readme" >/dev/null
+grep -F 'production check as repository-level' "$readme" >/dev/null
  grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'observability gap' "$readme" "$baseline" >/dev/null
 grep -F 'buck clean' "$readme" "$baseline" >/dev/null
@@ -84,6 +84,10 @@ grep -F 'caller-supplied `--junit-report`' "$readme" "$baseline" "$roadmap" >/de
 grep -F 'outer `buck2 test` capture' "$baseline" >/dev/null
 
 grep -F 'The bounded matrix covers pass' "$roadmap" >/dev/null
+grep -F 'DistInfo.nondebug_runtime_files' "$readme" "$roadmap" "$roadmap_follow_ups" >/dev/null
+grep -F 'buck2_nextest_runtime_closure' "$readme" "$roadmap" "$roadmap_follow_ups" "$justfile" >/dev/null
+grep -F 'native executable-relative materialization' "$roadmap" >/dev/null
+grep -F 'provider/action contract' "$roadmap_follow_ups" >/dev/null
 grep -F 'filtered-out,' "$roadmap" >/dev/null
 legacy_switch=$(printf '%s%s' -- -scenario)
 ! grep -F -- "$legacy_switch" "$readme" "$baseline" "$roadmap" >/dev/null
@@ -100,6 +104,8 @@ grep -F 'process-group prerequisite' "$follow_up" >/dev/null
 grep -F 'action graph wiring' "$follow_up" >/dev/null
 grep -F 'DefaultInfo' "$follow_up" >/dev/null
 grep -F 'relocated/sanitized declared-input scenario is required repository-level CI coverage' "$follow_up" >/dev/null
+grep -F 'generated Rust `resources` edge' "$roadmap_follow_ups" >/dev/null
+grep -F 'shared-library or build-script-specific' "$roadmap_follow_ups" >/dev/null
 
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"

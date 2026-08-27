@@ -239,13 +239,20 @@ Buck executable-provider research, but cannot relax the ambient-input boundary.
 <a id="realistic-rust-runtime-closure"></a>
 ## 6. Support a realistic Buck Rust runtime closure
 
-**Purpose and evidence.** The fixture manifest does not establish shared
-libraries, generated/build-script outputs, runtime data, or transitive provider
-closure. The earlier real-tool milestone is intentionally insufficient here.
+**Purpose and evidence.** This increment closes the first provider-runtime
+slice: the production `nextest_buck_test` path consumes the Rust executable's
+`DistInfo.nondebug_runtime_files`, and a generated Rust `resources` edge is
+available at the executable-relative native path. The positive production
+scenario passes through real cargo-nextest; the otherwise identical no-resource
+scenario reaches the named test and publishes its stable missing-resource
+failure. Shared libraries, build-script outputs, provider-derived environment
+and platform/runner metadata, and broader transitive semantics remain unproved.
 
-**Desired end state.** Obtain shared libraries, generated/build-script outputs,
-runtime data, environment, platform/runner information, and transitive runtime
-artifacts from supported Buck Rust providers or a minimal explicit wrapper.
+**Desired end state.** Extend the established provider authority to shared
+libraries, generated/build-script outputs, runtime data, environment,
+platform/runner information, and other transitive runtime artifacts from
+supported Buck Rust providers or a minimal explicit wrapper, without adding
+consumer-authored layout or ambient fallback.
 
 **Implementation boundaries.** Never guess output layout, scan `buck-out`, or
 use ambient state. Buck remains authoritative for the complete closure and
@@ -254,11 +261,15 @@ nextest receives only declared executable/runtime records.
 **Dependencies/order.** Follow the fixture/toolchain proof in follow-up 5 and use
 the generic record contract from follow-up 3.
 
-**Acceptance evidence.** `buck2_nextest_runtime_closure`, using the production
-Buck test rule and real declared nextest toolchain, must independently prove at
-least one shared-library or generated/build-script dependency and fail when that
-specific declared runtime edge is removed. The fixture-only proof cannot satisfy
-this test.
+**Acceptance evidence.** The completed `buck2_nextest_runtime_closure`, using
+the production Buck test rule and real declared nextest toolchain, proves a
+Buck-generated Rust `resources` dependency and fails when that specific provider
+edge is removed. The registered provider/action contract additionally proves the
+positive `DistInfo` closure is materialized without a packaging or staging action.
+This closes only the generated-resource/provider-file portion; a future
+extension must independently prove shared-library or build-script-specific
+behavior and any provider-derived environment/platform semantics before this
+broad follow-up is complete.
 
 **Risks/decision triggers.** Fresh provider investigation decides whether current
 Buck Rust providers expose enough information or a minimal wrapper is needed.

@@ -20,9 +20,7 @@ GOOD_RECORD = {
     "binary_identity": "binary=one",
     "display_name": "same display",
     "target_kind": "test",
-    "executable": {"source": "source/bin", "destination": "bin/test", "kind": "regular_file"},
-    "runtime": [{"source": "source/runtime", "destination": "runtime/file", "kind": "regular_file"}],
-    "generated_outputs": [],
+    "executable": {"source": "source/bin", "kind": "regular_file"},
     "cwd": "work",
     "platform": "aarch64-apple-darwin",
 }
@@ -69,15 +67,13 @@ def test_generic_manifest_positive_and_negative_cases() -> None:
             "duplicate-triple": lambda item: item,
             "duplicate-executable": lambda item: item,
             "multiple-executables": lambda item: item,
-            "unsafe-runtime": lambda item: item,
             "missing-platform": lambda item: item,
-            "generated-output": lambda item: item,
+            "unknown-runtime": lambda item: item,
+            "unknown-generated-output": lambda item: item,
             "overlap-executable-parent": lambda item: item,
-            "overlap-cwd-parent": lambda item: item,
             "unsafe-cwd-quote": lambda item: item,
             "unsafe-cwd-control": lambda item: item,
             "cross-package-cwd": lambda item: item,
-            "cross-package-destination": lambda item: item,
         }
         for name in cases:
             candidate = copy.deepcopy(manifest)
@@ -89,17 +85,17 @@ def test_generic_manifest_positive_and_negative_cases() -> None:
                 candidate["records"].append(other)
             elif name == "multiple-executables":
                 candidate["records"][0]["executable"] = [GOOD_RECORD["executable"], GOOD_RECORD["executable"]]
-            elif name == "unsafe-runtime":
-                candidate["records"][0]["runtime"][0]["destination"] = "../escape"
             elif name == "missing-platform":
                 del candidate["records"][0]["platform"]
-            elif name == "generated-output":
-                candidate["records"][0]["generated_outputs"] = [{"destination": "generated/file"}]
+            elif name == "unknown-runtime":
+                candidate["records"][0]["runtime"] = []
+            elif name == "unknown-generated-output":
+                candidate["records"][0]["generated_outputs"] = []
             elif name == "overlap-executable-parent":
-                candidate["records"][0]["runtime"][0]["destination"] = "bin/test/file"
+                candidate["records"][0]["executable"]["source"] = "source/bin/file"
             elif name == "overlap-cwd-parent":
                 candidate["records"][0]["cwd"] = "work/subdir"
-                candidate["records"][0]["runtime"][0]["destination"] = "work"
+                candidate["records"][0]["executable"]["source"] = "work/subdir/bin/test"
             elif name == "unsafe-cwd-quote":
                 candidate["records"][0]["cwd"] = 'work"quoted'
             elif name == "unsafe-cwd-control":
@@ -110,19 +106,6 @@ def test_generic_manifest_positive_and_negative_cases() -> None:
                 other["binary_identity"] = "other-binary"
                 other["cwd"] = "work/nested"
                 other["executable"]["source"] = "other/bin"
-                other["executable"]["destination"] = "work/nested/bin/test"
-                other["runtime"][0]["source"] = "other/runtime"
-                other["runtime"][0]["destination"] = "work/nested/runtime/file"
-                candidate["records"].append(other)
-            elif name == "cross-package-destination":
-                other = copy.deepcopy(GOOD_RECORD)
-                other["package_identity"] = "other-package"
-                other["binary_identity"] = "other-binary"
-                other["cwd"] = "other-work"
-                other["executable"]["source"] = "other/bin"
-                other["executable"]["destination"] = "work/other-package/bin/test"
-                other["runtime"][0]["source"] = "other/runtime"
-                other["runtime"][0]["destination"] = "other-work/runtime/file"
                 candidate["records"].append(other)
             path.write_text(json.dumps(candidate), encoding="utf-8")
             process = subprocess.run(

@@ -8,7 +8,7 @@ buck-clean-stale:
     BUCK2={{quote(buck)}} {{quote(buck)}} clean --stale
 
 # Run every repository check, including the repository-level Buck action inspection.
-ci: repository_hygiene _relocation-preflight _ci-buck2_nextest_executor_junit _ci-nextest_real_declared_toolchain _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
+ci: repository_hygiene _relocation-preflight _ci-buck2_nextest_executor_junit _ci-nextest_real_declared_toolchain _ci-nextest_runtime_closure _ci-nextest_runtime_provider_contract _ci-nextest_buck_test_relocated_sanitized _ci-nextest_cancellation_cleanup _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
 
 _relocation-preflight:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/adapter_relocated_preflight.sh {{project_root}}
@@ -28,6 +28,15 @@ _ci-buck2_nextest_executor_junit: _relocation-preflight
 _ci-nextest_real_declared_toolchain: _relocation-preflight
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_real_declared_toolchain.sh
 
+_ci-nextest_runtime_closure: _relocation-preflight
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_runtime_closure.sh
+
+_ci-nextest_runtime_provider_contract: _relocation-preflight
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} python3 {{project_root}}/buck2_nextest_runtime_provider_contract.py {{buck}} {{project_root}}
+
+_ci-nextest_buck_test_relocated_sanitized: _relocation-preflight
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/nextest_buck_test_relocated_sanitized.sh
+
 _ci-nextest_cancellation_cleanup: _relocation-preflight
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_cancellation_cleanup.sh
 
@@ -36,6 +45,8 @@ _buck-ci: _relocation-preflight
         //executor:nextest-v2-executor-tests \
         //:buck2_nextest_external_test_surface \
         //:test_semantic_contract \
+        //:buck2_nextest_runtime_closure_fixture_unit \
+        //:buck2_nextest_runtime_provider_fixture_contract \
         //:adapter_mode_validation \
         //:adapter_process_group_validation \
         //:adapter_signal_cleanup \
@@ -74,6 +85,13 @@ _buck-ci: _relocation-preflight
         //:validate_artifact_manifest
 
 # Run the repository-level action graph inspection without nesting Buck in sh_test.
+buck2_nextest_runtime_closure:
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/buck2_nextest_runtime_closure.sh
+buck2_nextest_runtime_provider_contract:
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} python3 {{project_root}}/buck2_nextest_runtime_provider_contract.py {{buck}} {{project_root}}
+nextest_buck_test_relocated_sanitized:
+    BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} sh {{project_root}}/nextest_buck_test_relocated_sanitized.sh
+
 nextest_buck_artifact_action_inspection:
     BUCK2={{buck}} BUCK_PROJECT_ROOT={{project_root}} {{project_root}}/nextest_buck_artifact_action_inspection.py {{buck}} {{project_root}}
 nextest_buck_artifact_action_metadata:

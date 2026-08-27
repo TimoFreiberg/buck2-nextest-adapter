@@ -29,12 +29,7 @@ fn write_atomic(path: &Path, contents: &str) {
 #[test]
 fn pass_case() {
     assert_eq!(std::env::var("BUCK2_ARTIFACT_RUNTIME").as_deref(), Ok("declared"));
-    let content = ["runtime/alpha.txt", "runtime/beta.txt", "runtime/gamma.txt"]
-        .iter()
-        .find_map(|path| std::fs::read_to_string(path).ok())
-        .expect("declared runtime input");
-    assert_eq!(content, "buck2-nextest-artifact-runtime-v1\n");
-    println!("nextest-v2 fixture: cwd={} runtime={}", std::env::current_dir().unwrap().display(), content.trim());
+    println!("nextest-v2 fixture: cwd={}", std::env::current_dir().unwrap().display());
 }
 
 #[test]

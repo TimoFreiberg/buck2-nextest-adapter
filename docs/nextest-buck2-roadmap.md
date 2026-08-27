@@ -53,10 +53,13 @@ with no distinct XML marker. Runner-side signal handling and cleanup cover only
 signals delivered to the runner and process groups it can observe. The pinned
 Buck executor may terminate the runner before that handler runs, and nextest
 may create a separate process group, so outer cancellation and descendant
-teardown remain deferred. Windows remains unsupported. Realistic
-provider-derived runtime closure, broader nextest features such as
-retries/groups/capture, compatibility simplification, and live remote
-validation remain future work.
+teardown remain deferred. Windows remains unsupported. The provider-derived runtime-file slice is now
+proved for a generated Rust `resources` edge: `DistInfo.nondebug_runtime_files`
+is authoritative, native executable-relative materialization is preserved, and
+the no-resource control fails in the named test. Broader runtime semantics
+(shared-library-specific proof, provider-derived environment/platform identity,
+build-script outputs, and remote validation), plus retries/groups/capture and
+compatibility simplification, remain future work.
 
 ## Terminology correction
 
@@ -323,7 +326,7 @@ The schema-v2 production vertical slice above is the current-state record. The
 following items remain ordered follow-ups; detailed rationale, boundaries, and
 acceptance evidence live in [`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
 
-1. **[Support a realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Derive shared libraries, generated/build-script outputs, runtime data, environment, platform information, and transitive artifacts from supported providers or a minimal explicit wrapper.
+1. **[Support the remaining realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed `DistInfo.nondebug_runtime_files` and generated-resource proof to shared libraries, build-script outputs, provider-derived environment/platform information, and other transitive runtime semantics.
 2. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
 3. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
 4. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
