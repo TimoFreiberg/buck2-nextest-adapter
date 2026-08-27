@@ -145,7 +145,10 @@ fn safe_path(value: &str, field: &str) -> ContractResult<()> {
 }
 
 fn safe_toml_path(value: &str, field: &str) -> ContractResult<()> {
-    if value.chars().any(|character| character == '"' || character.is_control()) {
+    if value
+        .chars()
+        .any(|character| character == '"' || character.is_control())
+    {
         return Err(ContractError::invalid(format!(
             "{field} contains characters that cannot be represented safely in TOML"
         )));
@@ -247,10 +250,19 @@ impl ManifestV2 {
             }
             safe_path(&record.cwd, "cwd")?;
             safe_toml_path(&record.cwd, "cwd")?;
-            if record.cwd != record.executable.destination && !record.executable.destination.starts_with(&(record.cwd.clone() + "/")) {
-                return Err(ContractError::invalid("executable destination must be inside the package cwd"));
+            if record.cwd != record.executable.destination
+                && !record
+                    .executable
+                    .destination
+                    .starts_with(&(record.cwd.clone() + "/"))
+            {
+                return Err(ContractError::invalid(
+                    "executable destination must be inside the package cwd",
+                ));
             }
-            if let Some(previous) = package_cwds.insert(record.package_identity.clone(), record.cwd.clone()) {
+            if let Some(previous) =
+                package_cwds.insert(record.package_identity.clone(), record.cwd.clone())
+            {
                 if previous != record.cwd {
                     return Err(ContractError::invalid(
                         "all records for a package identity must use one cwd",
@@ -264,7 +276,10 @@ impl ManifestV2 {
                         "package cwds overlap across package identities",
                     ));
                 }
-                if cwd_packages.insert(record.cwd.clone(), record.package_identity.clone()).is_some() {
+                if cwd_packages
+                    .insert(record.cwd.clone(), record.package_identity.clone())
+                    .is_some()
+                {
                     return Err(ContractError::invalid(
                         "one cwd must not be assigned to multiple package identities",
                     ));

@@ -422,8 +422,13 @@ fn validate_bundle(
             .as_str()
             .ok_or("bundle resource path must be a string")?;
         let destination_path = rel_path(destination, "bundle resource path")?;
-        if manifest_destinations.iter().any(|manifest_destination| paths_overlap(&destination_path, manifest_destination)) {
-            return Err(format!("bundle resource path overlaps a manifest artifact: {destination}"));
+        if manifest_destinations
+            .iter()
+            .any(|manifest_destination| paths_overlap(&destination_path, manifest_destination))
+        {
+            return Err(format!(
+                "bundle resource path overlaps a manifest artifact: {destination}"
+            ));
         }
         if !seen_sources.insert(source.clone()) || !seen_paths.insert(destination) {
             return Err("bundle resources contain duplicate source or path".into());
@@ -1530,7 +1535,9 @@ fn run_buck_artifact(a: Args) -> Result<i32, String> {
     }
     let (manifest_v, ex, wd, _runtime, menv) = validate_manifest(&manifest, &root, false)?;
     let bundle_json = a.bundle_json.as_ref().unwrap();
-    let mut manifest_destinations = vec![PathBuf::from(manifest_v["paths"]["executable"].as_str().unwrap())];
+    let mut manifest_destinations = vec![PathBuf::from(
+        manifest_v["paths"]["executable"].as_str().unwrap(),
+    )];
     manifest_destinations.extend(
         manifest_v["paths"]["runtime_inputs"]
             .as_array()
@@ -1538,7 +1545,8 @@ fn run_buck_artifact(a: Args) -> Result<i32, String> {
             .iter()
             .map(|value| PathBuf::from(value.as_str().unwrap())),
     );
-    let (bundle_pairs, bundle_env) = validate_bundle(bundle_json, &a.bundle_resources, &manifest_destinations)?;
+    let (bundle_pairs, bundle_env) =
+        validate_bundle(bundle_json, &a.bundle_resources, &manifest_destinations)?;
     let executable_destination = root.join(manifest_v["paths"]["executable"].as_str().unwrap());
     copy_regular(&artifact, &executable_destination, true).map_err(|error| {
         format!(
@@ -1778,7 +1786,10 @@ mod tests {
         assert!(paths_overlap(Path::new("bin/test"), Path::new("bin/test")));
         assert!(paths_overlap(Path::new("bin/test"), Path::new("bin")));
         assert!(paths_overlap(Path::new("bin"), Path::new("bin/test")));
-        assert!(!paths_overlap(Path::new("bin/test"), Path::new("bin/other")));
+        assert!(!paths_overlap(
+            Path::new("bin/test"),
+            Path::new("bin/other")
+        ));
     }
 }
 

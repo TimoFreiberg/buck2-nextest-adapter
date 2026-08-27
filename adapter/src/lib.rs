@@ -60,12 +60,15 @@ mod contract_tests {
         for cwd in ["work\"quote", "work\nline", "work\u{0007}bell"] {
             let mut candidate = record("one");
             candidate.cwd = cwd.into();
-            assert!(ManifestV2 {
-                schema_version: 2,
-                records: vec![candidate],
-            }
-            .validate()
-            .is_err(), "cwd should be rejected: {cwd:?}");
+            assert!(
+                ManifestV2 {
+                    schema_version: 2,
+                    records: vec![candidate],
+                }
+                .validate()
+                .is_err(),
+                "cwd should be rejected: {cwd:?}"
+            );
         }
 
         let mut nested = record("two");
