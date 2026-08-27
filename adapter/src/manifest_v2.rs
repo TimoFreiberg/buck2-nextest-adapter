@@ -99,12 +99,14 @@ pub fn decode_semantic_id(value: &str) -> ContractResult<(String, String, String
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct PathRecord {
     pub source: String,
     pub destination: String,
     pub kind: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct GenericRecord {
     pub package_identity: String,
     pub owner_label: String,
@@ -116,11 +118,11 @@ pub struct GenericRecord {
     pub generated_outputs: Vec<String>,
     pub cwd: String,
     pub platform: String,
-    pub environment: BTreeMap<String, String>,
     #[serde(default)]
     pub id: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ManifestV2 {
     pub schema_version: u8,
     pub records: Vec<GenericRecord>,
@@ -141,13 +143,32 @@ fn safe_path(value: &str, field: &str) -> ContractResult<()> {
     }
     Ok(())
 }
+
+fn safe_toml_path(value: &str, field: &str) -> ContractResult<()> {
+    if value.chars().any(|character| character == '"' || character.is_control()) {
+        return Err(ContractError::invalid(format!(
+            "{field} contains characters that cannot be represented safely in TOML"
+        )));
+    }
+    Ok(())
+}
+
 fn overlaps(a: &str, b: &str) -> bool {
     a == b || a.starts_with(&(b.to_owned() + "/")) || b.starts_with(&(a.to_owned() + "/"))
 }
 fn valid_owner(owner: &str) -> bool {
-    owner.starts_with("//")
-        && !owner.contains(char::is_whitespace)
-        && owner[2..].split('/').all(|p| !p.is_empty())
+    if !owner.starts_with("//") || owner.contains(char::is_whitespace) {
+        return false;
+    }
+    let body = &owner[2..];
+    if let Some(target) = body.strip_prefix(':') {
+        return !target.is_empty();
+    }
+    let parts: Vec<_> = body.split(':').collect();
+    parts.len() == 2
+        && !parts[0].is_empty()
+        && !parts[1].is_empty()
+        && parts[0].split('/').all(|component| !component.is_empty())
 }
 
 impl ManifestV2 {
@@ -158,8 +179,18 @@ impl ManifestV2 {
             ));
         }
         let mut identities = BTreeSet::new();
-        let mut sources = BTreeSet::new();
-        let mut destinations = Vec::new();
+        let mut executable_sources = BTreeSet::new();
+        for record in &self.records {
+            safe_path(&record.executable.source, "executable.source")?;
+            if !executable_sources.insert(record.executable.source.clone()) {
+                return Err(ContractError::invalid(
+                    "executable must be a unique regular file",
+                ));
+            }
+        }
+        let mut destinations: Vec<(String, String)> = Vec::new();
+        let mut package_cwds = BTreeMap::new();
+        let mut cwd_packages = BTreeMap::new();
         let mut normalized = Vec::new();
         for (i, record) in self.records.iter().enumerate() {
             let prefix = format!("records[{i}]");
@@ -195,11 +226,8 @@ impl ManifestV2 {
                 }
             }
             let mut paths = Vec::new();
-            safe_path(&record.executable.source, "executable.source")?;
             safe_path(&record.executable.destination, "executable.destination")?;
-            if record.executable.kind != "regular_file"
-                || !sources.insert(record.executable.source.clone())
-            {
+            if record.executable.kind != "regular_file" {
                 return Err(ContractError::invalid(
                     "executable must be a unique regular file",
                 ));
@@ -209,7 +237,7 @@ impl ManifestV2 {
             for item in &record.runtime {
                 safe_path(&item.source, "runtime.source")?;
                 safe_path(&item.destination, "runtime.destination")?;
-                if item.kind != "regular_file" || sources.contains(&item.source) {
+                if item.kind != "regular_file" || executable_sources.contains(&item.source) {
                     return Err(ContractError::invalid(
                         "runtime entries must be regular files distinct from executables",
                     ));
@@ -218,18 +246,50 @@ impl ManifestV2 {
                 runtime.push(item.clone());
             }
             safe_path(&record.cwd, "cwd")?;
-            paths.push(record.cwd.clone());
-            for (pos, path) in paths.iter().enumerate() {
+            safe_toml_path(&record.cwd, "cwd")?;
+            if record.cwd != record.executable.destination && !record.executable.destination.starts_with(&(record.cwd.clone() + "/")) {
+                return Err(ContractError::invalid("executable destination must be inside the package cwd"));
+            }
+            if let Some(previous) = package_cwds.insert(record.package_identity.clone(), record.cwd.clone()) {
+                if previous != record.cwd {
+                    return Err(ContractError::invalid(
+                        "all records for a package identity must use one cwd",
+                    ));
+                }
+            } else {
+                if package_cwds.iter().any(|(package, cwd)| {
+                    package != &record.package_identity && overlaps(cwd, &record.cwd)
+                }) {
+                    return Err(ContractError::invalid(
+                        "package cwds overlap across package identities",
+                    ));
+                }
+                if cwd_packages.insert(record.cwd.clone(), record.package_identity.clone()).is_some() {
+                    return Err(ContractError::invalid(
+                        "one cwd must not be assigned to multiple package identities",
+                    ));
+                }
+            }
+            if destinations.iter().any(|(path, package)| {
+                package != &record.package_identity && overlaps(path, &record.cwd)
+            }) {
+                return Err(ContractError::invalid(
+                    "package cwd overlaps a destination from another package",
+                ));
+            }
+            for path in &paths {
                 if path == "manifest.json"
                     || path.starts_with("manifest.json/")
-                    || destinations.iter().any(|old: &String| overlaps(old, path))
+                    || destinations.iter().any(|(old, _)| overlaps(old, path))
+                    || package_cwds.iter().any(|(package, cwd)| {
+                        package != &record.package_identity && overlaps(cwd, path)
+                    })
                 {
                     return Err(ContractError::invalid(
                         "manifest paths overlap or are adapter-owned",
                     ));
                 }
-                destinations.push(path.clone());
-                let _ = pos;
+                destinations.push((path.clone(), record.package_identity.clone()));
             }
             if record.generated_outputs.len() > 0 {
                 return Err(ContractError::invalid("generated outputs are unsupported"));
@@ -238,17 +298,6 @@ impl ManifestV2 {
                 return Err(ContractError::invalid(
                     "platform must be opaque and whitespace-free",
                 ));
-            }
-            for (name, value) in &record.environment {
-                if name.is_empty()
-                    || !name.chars().enumerate().all(|(n, c)| {
-                        c == '_' || c.is_ascii_alphanumeric() && (n > 0 || c.is_ascii_alphabetic())
-                    })
-                    || name.starts_with("BUCK2_NEXTEST_")
-                    || value.contains('\0')
-                {
-                    return Err(ContractError::invalid("invalid environment"));
-                }
             }
             normalized.push(GenericRecord {
                 id: Some(id),

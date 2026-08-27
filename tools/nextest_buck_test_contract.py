@@ -2,8 +2,8 @@
 """Validate the declared generic Buck/nextest test contract.
 
 This is deliberately a contract fixture, not a nextest runner. The production
-rule hands one suite to a future adapter; this executable proves that Buck
-supplies a declared manifest and that validation happens before dispatch.
+rule hands one suite to the schema-v2 Rust runner; this executable proves that
+Buck supplies a declared manifest and that validation happens before dispatch.
 """
 from __future__ import annotations
 
@@ -39,7 +39,6 @@ def main() -> int:
         return 2
     print("buck2-nextest-contract: provider=NextestBuckTestBinaryInfo")
     print(f"buck2-nextest-contract: records={len(manifest['records'])}")
-    print("buck2-nextest-contract: dispatch=deferred-nextest-suite")
     print(json.dumps([record["id"] for record in manifest["records"]], sort_keys=True))
     return 0
 

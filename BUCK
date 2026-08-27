@@ -3,6 +3,12 @@ filegroup(
     srcs = ["fixture/Cargo.toml"],
 )
 
+genrule(
+    name = "unsupported_nextest_host",
+    out = "unsupported-nextest-host",
+    cmd = "echo 'cargo-nextest 0.9.143 supports only Linux x86_64/aarch64 and macOS x86_64/arm64' >&2; exit 1",
+)
+
 alias(
     name = "nextest_buck_artifact_runner",
     actual = "//adapter:nextest-buck-artifact",
@@ -12,6 +18,12 @@ alias(
 alias(
     name = "nextest_buck_test_contract_runner",
     actual = "//adapter:nextest-buck-test-contract",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "nextest_buck_test_runner",
+    actual = "//adapter:nextest-buck-test",
     visibility = ["PUBLIC"],
 )
 
@@ -112,6 +124,27 @@ rust_test(
     crate_root = "buck2_artifact.rs",
 )
 
+rust_test(
+    name = "buck2_nextest_rust_test_gamma",
+    srcs = ["nextest_v2_fixture.rs"],
+    crate_root = "nextest_v2_fixture.rs",
+    deps = ["//third-party:serde_json"],
+)
+
+rust_test(
+    name = "buck2_nextest_v2_rust_test_alpha",
+    srcs = ["nextest_v2_fixture.rs"],
+    crate_root = "nextest_v2_fixture.rs",
+    deps = ["//third-party:serde_json"],
+)
+
+rust_test(
+    name = "buck2_nextest_v2_rust_test_beta",
+    srcs = ["nextest_v2_fixture.rs"],
+    crate_root = "nextest_v2_fixture.rs",
+    deps = ["//third-party:serde_json"],
+)
+
 genrule(
     name = "buck2_nextest_artifact_manifest",
     out = "artifact-manifest.json",
@@ -153,37 +186,126 @@ genrule(
 
 nextest_buck_test_binary(
     name = "nextest_buck_test_binary_alpha",
-    executable = ":buck2_nextest_rust_test",
+    executable = ":buck2_nextest_v2_rust_test_alpha",
     runtime = [":runtime_resource"],
     runtime_destinations = ["runtime/alpha.txt"],
     package_identity = "demo-package",
     owner_label = "//:demo_tests",
     binary_identity = "alpha",
     display_name = "same-display-name",
-    executable_destination = "bin/alpha",
-    cwd = "work/alpha",
-    platform = "local-fixture-v1",
-    environment = {"NEXTEST_CONTRACT": "alpha"},
+    executable_destination = "work/bin/alpha",
+    cwd = "work",
+    platform = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": "x86_64-unknown-linux-gnu",
+            "ovr_config//cpu:arm64": "aarch64-unknown-linux-gnu",
+            "DEFAULT": "unsupported",
+        }),
+        "ovr_config//os:macos": select({
+            "ovr_config//cpu:x86_64": "x86_64-apple-darwin",
+            "ovr_config//cpu:arm64": "aarch64-apple-darwin",
+            "DEFAULT": "unsupported",
+        }),
+        "DEFAULT": "unsupported",
+    }),
 )
 
 nextest_buck_test_binary(
     name = "nextest_buck_test_binary_beta",
-    executable = ":buck2_nextest_rust_test_beta",
+    executable = ":buck2_nextest_v2_rust_test_beta",
     runtime = [":runtime_resource"],
     runtime_destinations = ["runtime/beta.txt"],
     package_identity = "demo-package",
     owner_label = "//:demo_tests",
     binary_identity = "beta",
     display_name = "same-display-name",
-    executable_destination = "bin/beta",
-    cwd = "work/beta",
-    platform = "local-fixture-v1",
-    environment = {"NEXTEST_CONTRACT": "beta"},
+    executable_destination = "work/bin/beta",
+    cwd = "work",
+    platform = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": "x86_64-unknown-linux-gnu",
+            "ovr_config//cpu:arm64": "aarch64-unknown-linux-gnu",
+            "DEFAULT": "unsupported",
+        }),
+        "ovr_config//os:macos": select({
+            "ovr_config//cpu:x86_64": "x86_64-apple-darwin",
+            "ovr_config//cpu:arm64": "aarch64-apple-darwin",
+            "DEFAULT": "unsupported",
+        }),
+        "DEFAULT": "unsupported",
+    }),
+)
+
+nextest_buck_test_binary(
+    name = "nextest_buck_test_binary_gamma",
+    executable = ":buck2_nextest_rust_test_gamma",
+    runtime = [":runtime_resource"],
+    runtime_destinations = ["runtime/gamma.txt"],
+    package_identity = "other-demo-package",
+    owner_label = "//:other_demo_tests",
+    binary_identity = "gamma",
+    display_name = "same-display-name",
+    executable_destination = "other-work/bin/gamma",
+    cwd = "other-work",
+    platform = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": "x86_64-unknown-linux-gnu",
+            "ovr_config//cpu:arm64": "aarch64-unknown-linux-gnu",
+            "DEFAULT": "unsupported",
+        }),
+        "ovr_config//os:macos": select({
+            "ovr_config//cpu:x86_64": "x86_64-apple-darwin",
+            "ovr_config//cpu:arm64": "aarch64-apple-darwin",
+            "DEFAULT": "unsupported",
+        }),
+        "DEFAULT": "unsupported",
+    }),
 )
 
 nextest_buck_test(
     name = "nextest_buck_test_generic_multi_binary",
-    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta"],
+    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta", ":nextest_buck_test_binary_gamma"],
+    env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_failure",
+    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta", ":nextest_buck_test_binary_gamma"],
+    filter = "test(=fail_case)",
+    env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_ignored",
+    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta", ":nextest_buck_test_binary_gamma"],
+    filter = "test(=ignored_case)",
+    no_tests = "pass",
+    report_skipped = "ignored",
+    env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_no_tests",
+    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta", ":nextest_buck_test_binary_gamma"],
+    filter = "test(=does_not_exist)",
+    no_tests = "fail",
+    env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_timeout",
+    records = [":nextest_buck_test_binary_alpha", ":nextest_buck_test_binary_beta", ":nextest_buck_test_binary_gamma"],
+    filter = "test(=timeout_case)",
+    timeout_seconds = 1,
+    env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
+)
+
+nextest_buck_test(
+    name = "nextest_buck_test_cancellation",
+    records = [":nextest_buck_test_binary_alpha"],
+    filter = "test(=cancellation_case)",
+    no_tests = "fail",
+    env = {"BUCK2_ARTIFACT_RUNTIME": "declared"},
 )
 
 sh_test(
@@ -206,6 +328,13 @@ sh_test(
     name = "buck2_nextest_external_test_surface",
     test = "tools/test_external_test_surface.py",
     resources = ["tools/test_external_test_surface.py", "nextest.bzl", "BUCK"],
+)
+
+sh_test(
+    name = "schema_v2_fixture_contract",
+    test = "tools/schema_v2_fixture_contract.sh",
+    args = ["$(location :buck2_nextest_v2_rust_test_alpha)"],
+    resources = ["tools/schema_v2_fixture_contract.sh", ":buck2_nextest_v2_rust_test_alpha"],
 )
 
 sh_test(

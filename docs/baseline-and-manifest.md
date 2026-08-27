@@ -66,10 +66,11 @@ The repository intentionally has three different output/result contracts:
    local declared `junit` directory, injects `BUCK2_NEXTEST_JUNIT_DIR`, validates its unchanged
    `junit.xml`, and exports it into the caller's fresh directory, including on test failure and
    timeout. The executor remains opt-in and is pinned to Buck commit
-   `1560aca2002865cd73d7cafb22c705cfb640b2bc`; it does not dispatch
-   cargo-nextest or implement the schema-v2 runner yet. Buck's nonzero status
-   remains authoritative, and valid reports from other targets can survive an
-   infrastructure failure.
+   `1560aca2002865cd73d7cafb22c705cfb640b2bc`. It owns the enclosing
+   `Execute2` transport and report export but does not run cargo-nextest; the
+   schema-v2 runner invoked by Buck performs nextest dispatch. Buck's nonzero
+   status remains authoritative, and valid reports from other targets can
+   survive an infrastructure failure.
 3. **Normal build action:** `//:nextest_buck_artifact_junit` declares a fixed
    `junit.xml` build output. That output is available to consumers only when
    the build action succeeds; it is not a failed-test report retrieval API.
@@ -93,16 +94,16 @@ The bounded process contract on supported Linux/macOS hosts is:
 
 If required verification/export fails after dispatch, the adapter returns `3`, prints `raw nextest status=<status>` plus the export error, and cleans once. Pre-dispatch validation returns `2` without a help probe or dispatch. A first HUP/INT/TERM returns `129/130/143` after the owned process group is drained; a wait, group-quiescence, or secure scratch-cleanup failure overrides to `2` and retains the bounded scratch root. Human-readable output remains diagnostic only. No adapter-owned summary, human-output parser, experimental libtest JSON, internal event stream, timeout-specific XML marker, or invented abort code exists.
 
-Stable cross-platform cancellation compatibility remains deferred, but supported Linux/macOS execution uses a native process group, forwards the first termination signal, waits for the leader, verifies bounded group quiescence, and cleans scratch only afterward. Windows and deliberate session/group escape are outside this guarantee.
+If the runner receives HUP, INT, or TERM, supported Linux/macOS execution uses a native process group, forwards the first termination signal, waits for the leader, verifies bounded quiescence for observed groups, and cleans scratch only afterward. The pinned Buck executor may terminate the runner before it receives a signal, and nextest may create a separate process group; outer cancellation and descendant teardown are therefore not yet proven. Windows and deliberate session/group escape are outside this guarantee.
 
 ## Generic provider contract (schema v2)
 
-The production `nextest_buck_test` rule consumes one `NextestBuckTestBinaryInfo` provider per binary. The provider owns exactly one executable association and its explicitly declared regular-file runtime closure; a target may consume multiple providers. Buck-derived test-action cwd/environment are represented by `ExternalRunnerTestInfo` where the pinned API provides stable semantics. The wrapper supplies only package identity, canonical owner label, binary identity/display name, explicit executable/closure destinations, opaque platform identity, and literal record environment.
+The production `nextest_buck_test` rule consumes one `NextestBuckTestBinaryInfo` provider per binary. The provider owns exactly one executable association and its explicitly declared regular-file runtime closure; a target may consume multiple providers. The suite supplies environment through `ExternalRunnerTestInfo`; each record supplies package identity, canonical owner label, binary identity/display name, explicit executable/closure destinations, package-scoped cwd, and opaque platform identity. Record-level environment is not part of schema v2 and strict decoding rejects it.
 
 Semantic uniqueness is `(package identity, canonical owner label, binary identity)`. Generated IDs are reversible `b2n1:p=<encoded>;o=<encoded>;b=<encoded>` values. Encoding preserves UTF-8 bytes, leaves only unreserved ASCII readable, and uses uppercase percent escapes for every other byte. The decoder rejects unsupported versions, empty identities, malformed/lowercase/non-canonical escapes, invalid UTF-8, duplicate fields, and trailing data. Validation rejects symlinks/trees, unsafe or overlapping destinations, duplicate executable associations, undeclared/generated outputs, adapter-owned paths/environment names, and missing identity/platform data before dispatch.
 
-The checked-in `tools/nextest_buck_test_records.json` and `tools/test_semantic_contract.py` fixtures prove same-display and multi-binary behavior. They are contract fixtures, not a checked-in test-case list and not a substitute for nextest discovery. The pinned Buck target currently emits contract markers and defers real nextest dispatch until the runner milestone.
+The checked-in `tools/nextest_buck_test_records.json` and `tools/test_semantic_contract.py` fixtures prove same-display and multi-binary identity behavior. They are contract fixtures, not a checked-in test-case list and not a substitute for nextest discovery. The production Buck target stages generated metadata, validates real nextest `list`, runs one real `nextest run`, and publishes nextest's unchanged JUnit bytes through the opt-in executor.
 
 ## Deferred scope
 
-Retries, groups, generated outputs beyond the current empty contract, shared libraries, direct embedding, native provider promotion, richer event protocols, cache behavior, cancellation/descendant teardown, failed-output retrieval, per-test delegation, and stable abort/cancel mapping remain later work. The remote gate does not attest worker-side execution or rule out RE-service deduplication. Required default CI coverage: `just ci` runs `adapter_relocated_sanitized` as a repository-level check, not a nested `sh_test`. Missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch; the check's additional Buck build/execution cost does not change `adapter.sh` product/runtime behavior. Process-group and live-remote checks remain separately opt-in.
+Retries, groups, generated outputs beyond the current empty contract, shared libraries, direct embedding, native provider promotion, richer event protocols, cache behavior, and failed-output retrieval remain later work. The production schema-v2 runner cleans up process groups when it receives a signal, but outer Buck cancellation can terminate it before its handler runs and nextest may create a separate group; complete descendant teardown remains deferred. The remote gate does not attest worker-side execution or rule out RE-service deduplication. Required default CI coverage includes the real declared-toolchain production check and the relocated adapter check as repository-level checks, not nested `sh_test`s. Missing relocation or process-inspection prerequisites fail CI with diagnostics before Buck or adapter dispatch. Process-group and live-remote checks remain separately bounded by their documented host/backend requirements.

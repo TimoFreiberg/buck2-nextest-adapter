@@ -6,9 +6,13 @@ This repository proves a local Buck2-to-nextest artifact boundary. Buck2 builds 
 
 - Buck2 with the bundled prelude `rust_test` rule.
 - Rust and Cargo.
-- `cargo-nextest` 0.9.143, exposing metadata/remap, filterset, output, profile, and no-tests controls used here.
+- The production `nextest_buck_test` rule selects an official, checksum-pinned
+  cargo-nextest 0.9.143 archive declared by Buck: Linux x86_64/aarch64 or macOS
+  x86_64/arm64 (using the universal macOS archive).
+- The separate `nextest_buck_artifact_junit` build action accepts a consumer-
+  declared cargo-nextest launcher and explicit runtime bundle.
 
-The adapter runtime is Rust-only and requires no Python, Cargo, source-tree helper, ambient PATH tool, or runtime network access. Consumers provide the cargo-nextest launcher as an executable Buck target exposing `RunInfo`; the launcher is invoked with the fixed `nextest` subcommand. The v1 `nextest_toolchain` contract also declares an ordered bundle of regular execution resources, normalized POSIX destinations, `sha256:<hex>:<size>` identities, typed literal/relative-path environment records, and an opaque non-empty `bundle_platform` identity. Every launcher support file, shared library, or other runtime file not supplied by `RunInfo` must be a bundle resource; the adapter does not infer or obtain ambient runtime files. Clean uncached Buck builds fetch the pinned Rust crates through Buck-owned checksum-verified HTTP archives; that build-time network requirement is separate from network-free adapter actions. Production actions are local-preferred (`prefer_local = True`) with cache upload disabled. Supported adapter hosts are Linux and macOS with native process groups; Windows is unsupported in this milestone.
+The adapter runtime is Rust-only and requires no Python, Cargo, rustc, source-tree helper, ambient PATH tool, or runtime network access. The production launcher is selected from Buck toolchain inputs and is invoked with the fixed `nextest` subcommand. Launcher support files or runtime files not supplied by `RunInfo` must be explicitly declared as regular-file bundle resources; a self-contained launcher may declare no resources. The adapter does not infer or obtain ambient runtime files. Clean uncached Buck builds fetch pinned Rust crates and official nextest archives through Buck-owned checksum-verified HTTP archives; that build-time network requirement is separate from network-free runner actions. The production test rule is non-cacheable and local-preferred where Buck permits; its caller JUnit export requires the opt-in v2 executor. Supported runner hosts are Linux and macOS with native process groups; Windows is unsupported.
 
 ## Opt-in Buck test executor and JUnit export
 
@@ -24,7 +28,12 @@ For a fresh run, create a private caller-owned directory whose only child is an
 empty directory named `junit`, then pass that child to the executor:
 
 ```sh
-root=$(mktemp -d "${TMPDIR:-/tmp}/buck2-nextest.XXXXXX")
+case "$(uname -s)" in
+  Darwin) temp_root=/private/tmp ;;
+  Linux) temp_root=/tmp ;;
+  *) echo "unsupported host" >&2; exit 2 ;;
+esac
+root=$(mktemp -d "$temp_root/buck2-nextest.XXXXXX")
 mkdir "$root/junit"
 set +e
 buck2 --config test.v2_test_executor="$(buck2 build --show-output //:nextest_v2_executor | tail -1 | cut -d' ' -f2)" \
@@ -56,27 +65,43 @@ caller-owned directory without replacing the failed status. Cancellation or a
 transport/reporting failure stops later publication; already committed reports
 are retained and late temporary reports are not committed.
 
-This milestone proves the Buck protocol and output-ownership boundary with
-compiled fixtures. Fixture XML is deliberately **not** evidence that
-cargo-nextest ran, and this executor does not implement schema-v2 metadata,
-nextest discovery, or cargo-nextest dispatch. Those belong to the following
-runner milestone.
+The executor remains a transport and output-ownership component: it does not run
+nextest itself. The production Rust schema-v2 runner performs metadata synthesis,
+real nextest discovery and execution, and unchanged JUnit publication before the
+executor exports the declared report to the caller.
 
 ## Canonical invocation
 
-`buck-artifact` remains the only supported adapter mode. The first reusable Buck test surface is `nextest_buck_test`, backed by the pinned Buck2 `ExternalRunnerTestInfo` API:
+`nextest_buck_test` is the supported fresh-test surface for the schema-v2
+vertical slice, backed by the pinned Buck2 `ExternalRunnerTestInfo` API:
 
 ```text
 nextest_buck_test_binary (one declared executable + explicit regular-file closure)
   -> nextest_buck_test (one top-level Buck suite, one ExternalRunnerTestInfo command)
-  -> future adapter/nextest dispatch
+       -> nextest_buck_test Rust runner
+            -> declared cargo-nextest 0.9.143 list/run
+                 -> one unchanged JUnit report
 ```
 
-The current milestone validates this ownership boundary and generic metadata contract; the Rust schema-v2 contract executable deliberately emits `dispatch=deferred-nextest-suite` and never invokes cargo-nextest. Real generic nextest dispatch remains a later milestone.
+Buck owns the enclosing command, declared inputs, resource limits, status,
+diagnostics, cancellation, and declared JUnit directory. Nextest owns test
+discovery, per-test process execution, scheduling, and JUnit generation. The
+runner never invokes Cargo or rustc, enumerates individual tests, parses human
+output, uses PATH or runtime network access, or consumes a checked-in test-name
+list. It checks each scratch-parent component for symlinks before creating its
+private child, but the portable path API cannot make validation and creation a
+single dirfd-atomic operation; this remains a residual TOCTOU limitation, not a
+race-free guarantee.
 
-`buck-artifact` is the only supported adapter mode:
+`buck-artifact` remains the separate build-action adapter mode:
 
-required default CI coverage: just ci runs adapter_relocated_sanitized. repository-level check, not a nested sh_test. missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch. The check rebuilds the four Buck outputs and hands them to the adapter from a relocated working directory. `just ci` incurs the check's additional Buck build/execution cost; `adapter.sh` product/runtime behavior is unchanged. The supported local host boundary is POSIX with the named relocation utilities, an ambient build-time `python3`, and the fixed `/usr/bin/python3` launcher interpreter. Process-group and live-remote checks remain explicitly opt-in capability gates.
+`just ci` runs the relocated artifact check and the real declared nextest
+production check as repository-level checks, not nested `sh_test`s. Missing
+relocation or host/process-inspection prerequisites fail CI with diagnostics
+before Buck or adapter dispatch. The supported production test hosts are Linux
+x86_64/aarch64 and macOS x86_64/arm64; the macOS tool is the universal archive.
+Process-group and live-remote checks remain bounded by their documented
+host/backend requirements.
 
 ```text
 nextest_buck_artifact buck-artifact --build-mode \
@@ -91,7 +116,7 @@ nextest_buck_artifact buck-artifact --build-mode \
   [--report-skipped default|ignored] [--timeout-seconds N]
 ```
 
-Every input and the report destination are validated before any nextest help probe or dispatch. The production interface is strict declared-input mode only: direct/ambient modes, `/tmp` fallback, recursive argv files, Python/Cargo validators, source-denial helpers, and PATH discovery are not supported. `BUCK_SCRATCH_PATH` is the only scratch parent; it must be a project-relative execution-owned path, and the runner creates one private child beneath it. Existing report parents must be real directories, not symlinks; the destination may be absent or an existing regular file, but may not be a directory or symlink. Export uses a mode-0600 same-directory temporary, fsync, and atomic replacement, so the last successful export wins. Linux and macOS use native process groups for cancellation and descendant cleanup.
+Every input and the report destination are validated before any nextest help probe or dispatch. The production interface is strict declared-input mode only: direct/ambient modes, `/tmp` fallback, recursive argv files, Python/Cargo validators, source-denial helpers, and PATH discovery are not supported. `BUCK_SCRATCH_PATH` is the only scratch parent; it must be a project-relative execution-owned path, and the runner creates one private child beneath it. Existing report parents must be real directories, not symlinks; the destination may be absent or an existing regular file, but may not be a directory or symlink. Export uses a mode-0600 same-directory temporary, fsync, and atomic replacement, so the last successful export wins. If the runner receives a termination signal, Linux and macOS use native process groups for the groups the runner can observe. Outer Buck cancellation may terminate the runner before it receives that signal, and nextest may create a separate group; complete descendant cleanup is not yet guaranteed.
 
 The adapter defaults to a private `ci` profile, `filter = test(=pass_case)`, `no_tests = auto`, `report_skipped = default`, and `timeout_seconds = 0`. These five values are also declared attrs on `nextest_buck_artifact_junit` and are literal action inputs, so changing a result-affecting value changes the Buck action identity. Profiles must match `[A-Za-z0-9][A-Za-z0-9_-]*`; syntactically safe `default-*` names are accepted, but nextest owns that upstream namespace and may assign them special meaning. Filters remain one quoted nextest expression and are never placed in TOML or paths. A positive timeout generates only the bounded `slow-timeout` table; `report_skipped = ignored` adds the corresponding JUnit setting. The fixed declared output remains `junit.xml`, while the generated profile-specific report and all other scratch stay private to each invocation. The adapter validates XML only to reject a broken internal report; it copies the nextest bytes unchanged and does not add a summary protocol.
 
@@ -110,7 +135,7 @@ The result combinations exercised by the test suite are:
 
 At the direct adapter layer, completed pass and test-failure runs require a valid caller-owned exported report. Other setup/metadata/unknown nonzero statuses retain their raw nextest status and export a report if one exists. A required post-dispatch verification/export failure returns adapter status `3` and prints the raw nextest status; pre-dispatch validation returns `2`. Human-readable nextest output remains diagnostic, not a protocol.
 
-A completed timeout, if later observed, remains nextest's ordinary test-failure class and JUnit `<failure>`; this milestone defines no timeout-specific XML marker. Process interruption uses the Unix signal-derived status for the first HUP/INT/TERM and drains the owned process group before scratch cleanup. Stable cross-platform cancellation compatibility remains deferred; Windows is unsupported.
+A completed timeout, if later observed, remains nextest's ordinary test-failure class and JUnit `<failure>`; this milestone defines no timeout-specific XML marker. If the runner receives HUP, INT, or TERM, it returns the corresponding Unix signal-derived status and drains the process groups it can observe before scratch cleanup. The pinned Buck executor can terminate the runner action before the runner receives a signal, and nextest may create a separate process group, so outer cancellation and descendant teardown remain unproven and deferred. Windows is unsupported.
 
 ## Build and test
 
@@ -126,9 +151,9 @@ nextest_toolchain(
 )
 ```
 
-Each launcher target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is invoked directly with the fixed `nextest` subcommand. A consumer must attach at least one `nextest_bundle_resource` target to the toolchain; every required shared library, launcher support file, or other runtime file not already supplied by `RunInfo` must be declared this way. Resource `path` values are relative normalized POSIX paths and resource digests are provider-owned `sha256:<hex>:<size>` values checked before and after staging. Environment entries are ordered `[name, kind, value]` records where `kind` is `literal` or `relative_path`; names are unique and may not replace adapter-owned variables. `bundle_platform` is an opaque execution identity, not the test artifact target triple and not a host `uname` inference. Invalid versions, paths, digests, environment records, or platform identities fail before probing nextest. The repository's fixtures under `tools/` are local convenience targets only; shared libraries and interpreters are not automatically discovered.
+Each launcher target must expose `DefaultInfo` and `RunInfo`; `cargo_nextest` is invoked directly with the fixed `nextest` subcommand. Bundle resources are optional: a self-contained launcher may use an empty list. Every required shared library, launcher support file, or other runtime file not already supplied by `RunInfo` must be declared as a `nextest_bundle_resource`. Resource `path` values are relative normalized POSIX paths and resource digests are provider-owned `sha256:<hex>:<size>` values checked before and after staging. Environment entries are ordered `[name, kind, value]` records where `kind` is `literal` or `relative_path`; names are unique and may not replace adapter-owned variables. `bundle_platform` is an opaque execution identity, not the test artifact target triple and not a host `uname` inference. Invalid versions, paths, digests, environment records, or platform identities fail before probing nextest. The repository's fixtures under `tools/` are local convenience targets only; shared libraries and interpreters are not automatically discovered.
 
-The fixed declared-output build surface runs the successful `pass_case` contract as a keyed, local-preferred Buck action. Ordinary builds therefore remain backend-independent, while an explicitly configured Buck2 remote executor can select the same action with `--remote-only`:
+The fixed declared-output build surface runs the successful `pass_case` contract as a keyed, local-preferred Buck action with cache upload disabled. Ordinary builds therefore remain backend-independent, while an explicitly configured Buck2 remote executor can select the same action with `--remote-only`:
 
 ```sh
 buck2 build //:nextest_buck_artifact_junit --show-output

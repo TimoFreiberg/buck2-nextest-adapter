@@ -16,6 +16,42 @@ def _is_canonical_owner_label(value):
     return True
 
 
+def _is_valid_suite_environment(environment):
+    reserved = ["PATH", "HOME", "TMPDIR", "CARGO_HOME", "CARGO_TARGET_DIR", "CARGO_MANIFEST_DIR", "CARGO_NET_OFFLINE", "CARGO_NET_GIT_FETCH_WITH_CLI"]
+    for name, value in environment.items():
+        if not name or not name[0].isalpha() and name[0] != "_":
+            return False
+        for index in range(len(name)):
+            char = name[index]
+            if not (char.isalnum() or char == "_"):
+                return False
+        if name.startswith("BUCK2_NEXTEST_") or name in reserved or "\x00" in str(value):
+            return False
+    return True
+
+
+def _is_normalized_relative_path(value):
+    if not value or value.startswith("/") or "\\" in value or "\x00" in value:
+        return False
+    for component in value.split("/"):
+        if not component or component == "." or component == "..":
+            return False
+    return True
+
+
+def _is_toml_safe_path(value):
+    if not _is_normalized_relative_path(value) or '"' in value:
+        return False
+    for control in ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08", "\x09", "\x0a", "\x0b", "\x0c", "\x0d", "\x0e", "\x0f", "\x10", "\x11", "\x12", "\x13", "\x14", "\x15", "\x16", "\x17", "\x18", "\x19", "\x1a", "\x1b", "\x1c", "\x1d", "\x1e", "\x1f", "\x7f"]:
+        if control in value:
+            return False
+    return True
+
+
+def _paths_overlap(left, right):
+    return left == right or left.startswith(right + "/") or right.startswith(left + "/")
+
+
 NextestBuckTestBinaryInfo = provider(
     fields = [
         "package_identity",
@@ -28,7 +64,6 @@ NextestBuckTestBinaryInfo = provider(
         "generated_outputs",
         "cwd",
         "platform",
-        "environment",
     ],
 )
 
@@ -64,7 +99,6 @@ def _nextest_buck_test_binary_impl(ctx):
             generated_outputs = [],
             cwd = ctx.attrs.cwd,
             platform = ctx.attrs.platform,
-            environment = ctx.attrs.environment,
         ),
     ]
 
@@ -83,12 +117,13 @@ nextest_buck_test_binary = rule(
         "executable_destination": attrs.string(),
         "cwd": attrs.string(),
         "platform": attrs.string(),
-        "environment": attrs.dict(key = attrs.string(), value = attrs.string(), default = {}),
     },
 )
 
 
 def _nextest_buck_test_impl(ctx):
+    if not _is_valid_suite_environment(ctx.attrs.env):
+        fail("nextest_buck_test env contains an invalid or adapter-owned variable")
     records = []
     for dependency in ctx.attrs.records:
         if NextestBuckTestBinaryInfo not in dependency:
@@ -99,12 +134,26 @@ def _nextest_buck_test_impl(ctx):
         fail("nextest_buck_test requires at least one binary record")
     manifest_records = []
     executable_sources = {}
+    package_cwds = {}
+    cwd_packages = {}
     for record in records:
         executable = record.executable["source"]
         executable_source = executable.short_path
         if executable_source in executable_sources:
             fail("nextest_buck_test records share one executable association: {} and {}".format(executable_sources[executable_source], record.binary_identity))
         executable_sources[executable_source] = record.binary_identity
+        if not _is_toml_safe_path(record.cwd):
+            fail("nextest_buck_test cwd must be a TOML-safe normalized relative POSIX path")
+        if record.package_identity in package_cwds and package_cwds[record.package_identity] != record.cwd:
+            fail("nextest_buck_test records for one package_identity must share one cwd")
+        if record.package_identity not in package_cwds:
+            for package, cwd in package_cwds.items():
+                if package != record.package_identity and _paths_overlap(cwd, record.cwd):
+                    fail("nextest_buck_test package cwds must not overlap")
+        package_cwds[record.package_identity] = record.cwd
+        if record.cwd in cwd_packages and cwd_packages[record.cwd] != record.package_identity:
+            fail("nextest_buck_test cwd must map to one package_identity")
+        cwd_packages[record.cwd] = record.package_identity
         manifest_runtime = []
         for runtime in record.runtime:
             manifest_runtime.append({
@@ -127,7 +176,6 @@ def _nextest_buck_test_impl(ctx):
             "generated_outputs": record.generated_outputs,
             "cwd": record.cwd,
             "platform": record.platform,
-            "environment": record.environment,
         })
     manifest = ctx.actions.write_json(
         "nextest-buck-test-manifest.json",
@@ -138,12 +186,47 @@ def _nextest_buck_test_impl(ctx):
         declared_inputs.extend(["--declared-input", record.executable["source"]])
         for runtime in record.runtime:
             declared_inputs.extend(["--declared-input", runtime["source"]])
+    toolchain = ctx.attrs._nextest_toolchain[NextestBuckToolchainInfo]
+    bundle_resources = toolchain.bundle_resources
+    bundle_json = nextest_bundle_json(
+        toolchain.bundle_version,
+        toolchain.bundle_platform,
+        bundle_resources,
+        toolchain.bundle_environment,
+    )
+    resource_inputs = [resource["source"] for resource in bundle_resources]
+    configured_environment = dict(ctx.attrs.env)
+    observation_dir = read_root_config("nextest_test", "observation_dir", "")
+    nonce = read_root_config("nextest_test", "nonce", "")
+    if observation_dir and not nonce:
+        fail("nextest_test.nonce is required with nextest_test.observation_dir")
+    if nonce and not observation_dir:
+        fail("nextest_test.observation_dir is required with nextest_test.nonce")
+    for name, value in [
+        ("NEXTEST_TEST_OBSERVATION_DIR", observation_dir),
+        ("NEXTEST_TEST_NONCE", nonce),
+    ]:
+        if value:
+            if name in configured_environment:
+                fail("nextest_test config cannot override a user suite environment variable")
+            configured_environment[name] = value
+    suite_environment = []
+    for name, value in configured_environment.items():
+        suite_environment.extend(["--suite-env", name, value])
     command = cmd_args(
         [
-            ctx.attrs._contract_runner[RunInfo],
+            ctx.attrs._runner[RunInfo],
             "--manifest", manifest,
             "--record-count", str(len(records)),
-        ] + declared_inputs,
+            "--cargo-nextest-argv", toolchain.cargo_nextest.args, "--end-argv",
+            "--bundle-json", bundle_json,
+            "--bundle-resources", resource_inputs, "--end-bundle-resources",
+            "--profile", ctx.attrs.profile,
+            "--filter", ctx.attrs.filter,
+            "--no-tests", ctx.attrs.no_tests,
+            "--report-skipped", ctx.attrs.report_skipped,
+            "--timeout-seconds", str(ctx.attrs.timeout_seconds),
+        ] + suite_environment + declared_inputs,
         hidden = [
             record.executable["source"]
             for record in records
@@ -172,7 +255,13 @@ nextest_buck_test = rule(
     impl = _nextest_buck_test_impl,
     attrs = {
         "records": attrs.list(attrs.dep(providers = [NextestBuckTestBinaryInfo])),
-        "_contract_runner": attrs.exec_dep(default = "//:nextest_buck_test_contract_runner", providers = [RunInfo]),
+        "_runner": attrs.exec_dep(default = "//:nextest_buck_test_runner", providers = [RunInfo]),
+        "_nextest_toolchain": attrs.toolchain_dep(default = "toolchains//:nextest-real", providers = [NextestBuckToolchainInfo]),
+        "profile": attrs.string(default = "ci"),
+        "filter": attrs.string(default = "test(=pass_case)"),
+        "no_tests": attrs.enum(["auto", "pass", "warn", "fail"], default = "auto"),
+        "report_skipped": attrs.enum(["default", "ignored"], default = "default"),
+        "timeout_seconds": attrs.int(default = 0),
         "env": attrs.dict(key = attrs.string(), value = attrs.arg(), default = {}),
         "labels": attrs.list(attrs.string(), default = []),
         "contacts": attrs.list(attrs.string(), default = []),

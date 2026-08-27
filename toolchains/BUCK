@@ -1,6 +1,96 @@
-load(":nextest.bzl", "nextest_bundle_resource", "nextest_system_tool", "nextest_toolchain")
+load(":nextest.bzl", "nextest_archive_executable", "nextest_bundle_resource", "nextest_system_tool", "nextest_toolchain")
 load("@prelude//toolchains:demo.bzl", "system_demo_toolchains")
 system_demo_toolchains()
+
+http_archive(
+    name = "cargo-nextest-linux-x86_64-archive",
+    visibility = ["PUBLIC"],
+    urls = ["https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.143/cargo-nextest-0.9.143-x86_64-unknown-linux-musl.tar.gz"],
+    sha256 = "6d891c18105ec2d33f6e441a4f92b7ccab47ba263e22055c8bb66884243f3389",
+    sub_targets = ["cargo-nextest"],
+)
+
+http_archive(
+    name = "cargo-nextest-linux-aarch64-archive",
+    visibility = ["PUBLIC"],
+    urls = ["https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.143/cargo-nextest-0.9.143-aarch64-unknown-linux-musl.tar.gz"],
+    sha256 = "0560ce0ce017f368c54b5db86588370fc03b470985490fa81200e62a657dda05",
+    sub_targets = ["cargo-nextest"],
+)
+
+http_archive(
+    name = "cargo-nextest-macos-universal-archive",
+    visibility = ["PUBLIC"],
+    urls = ["https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.143/cargo-nextest-0.9.143-universal-apple-darwin.tar.gz"],
+    sha256 = "4830d430411148d17602a75cc880bfb4dc8dac153dea59a48a2ef4cc93577f07",
+    sub_targets = ["cargo-nextest"],
+)
+
+nextest_archive_executable(
+    name = "cargo-nextest-linux-x86_64-validated",
+    visibility = ["PUBLIC"],
+    archive = ":cargo-nextest-linux-x86_64-archive",
+    out = "cargo-nextest-linux-x86_64",
+)
+
+nextest_archive_executable(
+    name = "cargo-nextest-linux-aarch64-validated",
+    visibility = ["PUBLIC"],
+    archive = ":cargo-nextest-linux-aarch64-archive",
+    out = "cargo-nextest-linux-aarch64",
+)
+
+nextest_archive_executable(
+    name = "cargo-nextest-macos-universal-validated",
+    visibility = ["PUBLIC"],
+    archive = ":cargo-nextest-macos-universal-archive",
+    out = "cargo-nextest-macos-universal",
+)
+
+nextest_system_tool(
+    name = "nextest-real-linux-x86_64",
+    visibility = ["PUBLIC"],
+    executable = ":cargo-nextest-linux-x86_64-validated",
+)
+
+nextest_system_tool(
+    name = "nextest-real-linux-aarch64",
+    visibility = ["PUBLIC"],
+    executable = ":cargo-nextest-linux-aarch64-validated",
+)
+
+nextest_system_tool(
+    name = "nextest-real-macos-universal",
+    visibility = ["PUBLIC"],
+    executable = ":cargo-nextest-macos-universal-validated",
+)
+
+nextest_toolchain(
+    name = "nextest-real",
+    visibility = ["PUBLIC"],
+    cargo_nextest = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": ":nextest-real-linux-x86_64",
+            "ovr_config//cpu:arm64": ":nextest-real-linux-aarch64",
+            "DEFAULT": "root//:unsupported_nextest_host",
+        }),
+        "ovr_config//os:macos": select({
+            "ovr_config//cpu:x86_64": ":nextest-real-macos-universal",
+            "ovr_config//cpu:arm64": ":nextest-real-macos-universal",
+            "DEFAULT": "root//:unsupported_nextest_host",
+        }),
+        "DEFAULT": "root//:unsupported_nextest_host",
+    }),
+    bundle_platform = select({
+        "ovr_config//os:linux": select({
+            "ovr_config//cpu:x86_64": "x86_64-unknown-linux-musl",
+            "ovr_config//cpu:arm64": "aarch64-unknown-linux-musl",
+            "DEFAULT": "unsupported",
+        }),
+        "ovr_config//os:macos": "universal-apple-darwin",
+        "DEFAULT": "unsupported",
+    }),
+)
 
 # These are deterministic local fixtures for this repository's tests. A consumer
 # supplies its own executable targets exposing DefaultInfo and RunInfo.

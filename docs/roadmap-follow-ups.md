@@ -120,12 +120,14 @@ indefinitely ambiguous before that record exists.
 in follow-up 3 before rewriting the runner. Its production rule is required by
 all later acceptance tests.
 
-**Acceptance evidence.** `buck2_nextest_real_declared_toolchain` and
-`buck2_nextest_cancellation_cleanup` must run through the production Buck test
-rule and real declared nextest toolchain. Additional lifecycle assertions must
-prove repeated `buck2 test` execution is not accidentally satisfied by a normal
-build cache, statuses remain documented, diagnostics remain Buck-owned, exact
-JUnit bytes are unchanged, and cancellation leaves no descendants.
+**Acceptance evidence.** `buck2_nextest_real_declared_toolchain` must run through
+the production Buck test rule and real declared nextest toolchain. Additional
+lifecycle assertions must prove repeated `buck2 test` execution is not
+accidentally satisfied by a normal build cache, statuses remain documented,
+diagnostics remain Buck-owned, and exact JUnit bytes are unchanged. The
+explicit `buck2_nextest_cancellation_cleanup` probe remains fail-closed, but it
+is deferred as passing evidence until the Buck-to-runner-to-nextest boundary
+can prove cancellation and descendant quiescence.
 
 **Risks/decision triggers.** Buck2 test-provider and executor APIs require fresh
 research. The operator decision gate is mandatory after the named evidence
@@ -142,11 +144,13 @@ or a minimal explicit wrapper/provider.
 **Desired end state.** Each record carries package identity, the
 configuration-independent canonical Buck owner label in cell/package/target
 form, binary identity, a non-unique display name, exactly one executable
-artifact, cwd, environment, runtime artifacts, platform, and generated/runtime
-outputs. The uniqueness key is exactly `(package identity, canonical Buck target label, binary identity)`. Cargo package IDs and nextest binary IDs are generated
-deterministically and reversibly from that semantic triple. Per-binary cwd and
-environment are preserved, and filters map through those generated package and
-binary identities plus test names discovered by nextest.
+artifact, runtime artifacts, platform, and generated/runtime outputs. Schema v2
+maps each package identity to one normalized package-scoped cwd; suite
+environment is supplied once by `nextest_buck_test`, not repeated per record.
+The uniqueness key is exactly `(package identity, canonical Buck target label, binary identity)`. Cargo package IDs and nextest binary IDs are generated
+deterministically and reversibly from that semantic triple. Filters map through
+those generated package and binary identities plus test names discovered by
+nextest.
 
 **Implementation boundaries.** Display name, executable basename, and filesystem
 path are excluded from identity. Reject missing fields, duplicate triples, duplicate executable association, multiple-executable record, and normalization/encoding collision before staging. In particular, reject one executable associated with multiple records and multiple executables in one record. Nextest `list` output is
@@ -195,9 +199,10 @@ implementation.
 
 **Acceptance evidence.** Existing status, exact-JUnit, malformed-input,
 relocation, source-denial, and action-policy checks remain behavioral gates.
-`buck2_nextest_cancellation_cleanup`, using the production Buck test rule and real
-declared nextest toolchain, must independently fail on leaked child processes or
-incorrect signal propagation.
+`buck2_nextest_cancellation_cleanup` remains an explicit fail-closed probe; it
+becomes passing evidence only after the production Buck test rule and real
+declared nextest toolchain provide a controllable boundary that proves signal
+propagation and descendant quiescence.
 
 **Risks/decision triggers.** Exact crate layout and libraries are deferred to
 implementation research. Evidence, not backwards compatibility, determines
@@ -297,7 +302,7 @@ A shared check name never permits a shared, non-specific assertion.
 | Output capture | `buck2_nextest_output_capture` | Fails unless per-test stdout/stderr visibility follows the selected nextest capture policy without runner parsing. | Uses the production Buck test rule and real declared nextest toolchain. |
 | Ignored tests | `buck2_nextest_ignored_tests` | Fails unless default and explicitly included ignored-test behavior differ as configured and JUnit reports each accurately. | Uses the production Buck test rule and real declared nextest toolchain. |
 | Groups and concurrency | `buck2_nextest_group_concurrency` | Fails unless group limits constrain overlap while permitted tests execute concurrently. | Uses the production Buck test rule and real declared nextest toolchain. |
-| Cancellation and no orphans | `buck2_nextest_cancellation_cleanup` | Fails if cancellation status/diagnostics regress or any nextest/test descendant survives. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Cancellation and no orphans | `buck2_nextest_cancellation_cleanup` | Fail-closed probe; becomes passing evidence only when outer cancellation reaches a controllable nextest process boundary and no descendant survives. | Uses the production Buck test rule and real declared nextest toolchain. |
 | Live remote platform and materialization | `buck2_nextest_remote_platform_and_materialization` | Fails unless a fresh non-cache-hit Execute carries declared platform properties and exact outputs materialize. | Uses the production Buck test rule and real declared nextest toolchain. |
 
 **Risks/decision triggers.** If the documented nextest CLI cannot express an

@@ -2,7 +2,16 @@
 
 ## Current position
 
-The repository proves one canonical local Buck2-built artifact handoff. Required default CI coverage: `just ci` runs `adapter_relocated_sanitized` as a repository-level check, not a nested `sh_test`; missing relocation prerequisites fail CI with diagnostics before Buck or adapter dispatch. The check uses a relocated working directory, sanitized PATH, explicit Buck-produced tools/resources, and Buck-owned scratch. Its additional Buck build/execution cost is intentional; `adapter.sh` product/runtime behavior is unchanged.
+The repository proves two deliberately separate local surfaces. The build surface is a
+Buck2-built artifact handoff. The production test surface is a fresh `buck2 test`
+suite that runs the official, checksum-pinned cargo-nextest 0.9.143 launcher
+selected by Buck for Linux x86_64/aarch64 and macOS x86_64/arm64. Required
+`just ci` coverage runs both as repository-level checks, not nested `sh_test`s;
+missing relocation, host, or process-inspection prerequisites fail with
+diagnostics before dispatch. The production runner uses only declared inputs,
+private scratch, and the opt-in v2 executor's declared JUnit directory. Its
+additional Buck build/execution cost is intentional; `adapter.sh` and the
+legacy declared-JUnit build action remain behaviorally separate.
 
 ```text
 Buck2 rust_test
@@ -24,22 +33,30 @@ The additive test-coverage follow-up is tracked in
 existing suite and adds observable checks for dispatch, configuration, validation,
 report-export safety, and Buck toolchain behavior.
 
-The first bounded Phase 5 milestone is complete: caller-selected JUnit pass-through
-and nextest process statuses are covered for pass (`0`), test failure (`100`),
-ignored/skipped success, filtered-out absence, and explicit no-tests (`4`). A
-post-dispatch required-export failure is adapter status `3`; pre-dispatch input
-validation is `2`. Human output is diagnostic only. The separate metadata-shape
-checks and explicit `nextest list` before each run are development and regression
-coverage; the final integration should retain the checks that protect its
-contract without assuming both steps belong in every production invocation.
+The schema-v2 production slice is implemented and its real declared-tool,
+metadata, status, JUnit, and fresh-execution checks pass: the generic provider
+contract supports one or more package-scoped binaries, including multiple
+binaries per package and equal display names across distinct semantic IDs. The
+Rust runner synthesizes the pinned 0.9.143 reuse-build metadata, validates real
+`nextest list`, runs exactly one real `nextest run`, supervises its process group,
+and publishes unchanged JUnit bytes into the executor-owned declared directory.
+The bounded matrix covers pass (`0`), test failure (`100`), ignored/skipped,
+filtered-out, explicit no-tests (`4`), and completed timeout behavior. The
+opt-in executor preserves Buck status, diagnostics, and caller export; its
+fresh-execution harness runs the real declared tool twice and rejects
+cache/observability substitutions. The milestone remains open for outer
+cancellation and descendant-teardown evidence: Buck may terminate the runner
+before its signal handler runs, and nextest may create a separate process group.
 
-This does not complete broad Phase 5 or later phases. A completed timeout remains
-an ordinary JUnit `<failure>`/test-failure status with no distinct XML marker.
-Process interruption, abort, and cancellation have no stable dedicated mapping
-and remain deferred until a supported machine-readable/process-group contract
-and test environment exist. Retries, groups, remote execution, generated outputs,
-shared libraries, direct embedding, native provider promotion, and richer event
-protocols also remain unproven.
+A completed timeout remains an ordinary JUnit `<failure>`/test-failure status
+with no distinct XML marker. Runner-side signal handling and cleanup cover only
+signals delivered to the runner and process groups it can observe. The pinned
+Buck executor may terminate the runner before that handler runs, and nextest
+may create a separate process group, so outer cancellation and descendant
+teardown remain deferred. Windows remains unsupported. Realistic
+provider-derived runtime closure, broader nextest features such as
+retries/groups/capture, compatibility simplification, and live remote
+validation remain future work.
 
 ## Terminology correction
 
@@ -228,7 +245,7 @@ clean`, and remote-like execution before promising result persistence.
 
 The strict failed-run semantics slice is complete: a deliberately failing `//:nextest_buck_artifact_junit_expected_failure` proves that nextest status `100` fails the declared Buck action, and a separate consumer build proves that failed declared `junit.xml` is not a supported `$(location)`/consumer path. The repository-level integration selects the invocation's event log or documented build-report action error, checks adapter private-root cleanup, and avoids asserting failed-output deletion. Buck's ordinary failed-action diagnostics remain the supported build diagnostics.
 
-The Phase 6 portability/action-key slice is complete. Consumers provide Cargo, Python, and cargo-nextest as executable targets exposing `DefaultInfo` and `RunInfo`; cargo-nextest remains a launcher used with the fixed `nextest` subcommand, while Cargo is keyed for source-denial and is not dispatched by build mode. The next local-readiness slice adds the versioned provider-owned bundle: every extra runtime file is a direct execution dependency with a normalized destination and checked `sha256:<hex>:<size>` identity, plus typed relative environment metadata and an opaque execution-platform identity. The adapter stages only those resources below its private Buck scratch root and rejects undeclared ambient fallback before nextest probing. Checked-in v1/v2 fixtures expose distinct bundle identities while preserving selected-tool coverage. The relocated/sanitized scenario and descendant process-group cleanup are local readiness checks; cancellation is positive coverage only where `setsid` is available. Materialization-event evidence remains best-effort and does not claim complete input enumeration or cache behavior. The action is local-preferred with cache upload disabled; explicit remote-only selection is available only through caller-supplied RE configuration. The opt-in remote gate preflights the caller-owned external execution platform and fails closed on missing or unstable evidence; its self-test is control-flow coverage only. No persistent worker, delegation, per-test remote scheduling, credentials, repository-owned platform, or mandatory remote CI is configured. Nested Buck invocation from `sh_test` remains avoided. Persistent records, failed-output retrieval, cancellation/descendant teardown, cache behavior, `error_handler`, retries, groups, arbitrary profile TOML, and actual backend validation remain deferred.
+The Phase 6 portability/action-key slice is complete. Consumers provide Cargo, Python, and cargo-nextest as executable targets exposing `DefaultInfo` and `RunInfo`; cargo-nextest remains a launcher used with the fixed `nextest` subcommand, while Cargo is keyed for source-denial and is not dispatched by build mode. The next local-readiness slice adds the versioned provider-owned bundle: every extra runtime file is a direct execution dependency with a normalized destination and checked `sha256:<hex>:<size>` identity, plus typed relative environment metadata and an opaque execution-platform identity. The adapter stages only those resources below its private Buck scratch root and rejects undeclared ambient fallback before nextest probing. Checked-in v1/v2 fixtures expose distinct bundle identities while preserving selected-tool coverage. The relocated/sanitized scenario and runner-side process-group cleanup are local readiness checks. The outer-cancellation probe is fail-closed but is not a passing CI gate: Buck may terminate the runner before its handler runs, and nextest may leave a child in a separate process group. Materialization-event evidence remains best-effort and does not claim complete input enumeration or cache behavior. The action is local-preferred with cache upload disabled; explicit remote-only selection is available only through caller-supplied RE configuration. The opt-in remote gate preflights the caller-owned external execution platform and fails closed on missing or unstable evidence; its self-test is control-flow coverage only. No persistent worker, delegation, per-test remote scheduling, credentials, repository-owned platform, or mandatory remote CI is configured. Nested Buck invocation from `sh_test` remains avoided. Persistent records, failed-output retrieval, outer cancellation/descendant teardown, cache behavior, `error_handler`, retries, groups, arbitrary profile TOML, and actual backend validation remain deferred.
 
 **Deliverable:** a documented ownership and lifecycle contract for results,
 persistent rerun records, scratch files, output identity, caching, and remote
@@ -300,19 +317,18 @@ is sufficient. Possible outcomes are:
 The decision should be based on measured metadata and execution requirements,
 not on the initial Cargo fixture.
 
-## Prioritized follow-ups (not yet implemented)
+## Remaining roadmap work
 
-The completed milestones above remain the current-state record. The following
-course correction is future work, ordered by dependency; detailed rationale,
-boundaries, and acceptance evidence live in
-[`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
+The schema-v2 production vertical slice above is the current-state record. The
+following items remain ordered follow-ups; detailed rationale, boundaries, and
+acceptance evidence live in [`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
 
-1. **[Freeze further remote-readiness expansion temporarily](roadmap-follow-ups.md#freeze-remote-readiness).** Preserve the fail-closed remote gate and platform-propagation blocker, but pause additional RE observability work until the local production path succeeds. This reprioritizes rather than removes Phase 8.
-2. **[Define the primary Buck test surface](roadmap-follow-ups.md#primary-buck-test-surface).** Design a reusable Buck2 test rule/provider so fresh execution belongs to `buck2 test`; do not remove or promote the existing declared JUnit build action before its evidence-backed, operator-approved decision gate.
-3. **[Generalize the artifact/runtime contract](roadmap-follow-ups.md#generic-artifact-runtime-contract).** Replace fixture constants with arbitrary one-or-more binary records whose stable identity is `(package identity, canonical Buck target label, binary identity)`, while Buck supplies the declared runtime closure and nextest discovers test names.
-4. **[Implement a Rust runner](roadmap-follow-ups.md#rust-runner).** After the Buck test surface and generic contract settle, replace shell orchestration with a small runner limited to validation, staging, argv construction, top-level nextest supervision, cancellation/cleanup, and unchanged JUnit export.
-5. **[Prove real nextest through the declared production path](roadmap-follow-ups.md#real-declared-nextest).** Run a real Buck-declared cargo-nextest and its complete fixture/toolchain closure through sanitized, Buck-owned execution with real list/run and byte-identical JUnit.
-6. **[Support a realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Derive shared libraries, generated/build-script outputs, runtime data, environment, platform information, and transitive artifacts from supported providers or a minimal explicit wrapper.
-7. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover process isolation, flaky retry, timeout/slowness, capture, ignored tests, groups/concurrency, cancellation, and a realistic runtime dependency through the production rule and real toolchain.
-8. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Generate supported metadata explicitly and reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
-9. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Once the local generic path is proven, decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, cancellation, failed-result, and cache validation.
+1. **[Support a realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Derive shared libraries, generated/build-script outputs, runtime data, environment, platform information, and transitive artifacts from supported providers or a minimal explicit wrapper.
+2. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
+3. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
+4. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
+
+The existing declared-JUnit build action remains behind its separate,
+evidence-backed operator decision gate. Direct nextest embedding or forking,
+per-test Buck delegation, persistent workers/records, and richer event/result
+protocols remain explicitly deferred until evidence requires them.

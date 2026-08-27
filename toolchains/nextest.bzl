@@ -28,7 +28,7 @@ def _is_safe_identity(value):
         return False
     for index in range(len(value)):
         char = value[index]
-        if not ((char >= "a" and char <= "z") or (char >= "A" and char <= "Z") or (char >= "0" and char <= "9") or char in "._-:/"):
+        if not (char.isalnum() or char in "._-:/"):
             return False
     return True
 
@@ -38,34 +38,27 @@ def _validate_digest(value):
     if len(parts) != 3 or parts[0] != "sha256" or len(parts[1]) != 64 or not parts[2].isdigit():
         fail("bundle resource digest must be sha256:<hex>:<size>")
     for index in range(len(parts[1])):
-        char = parts[1][index]
-        if char not in "0123456789abcdefABCDEF":
+        if parts[1][index] not in "0123456789abcdefABCDEF":
             fail("bundle resource digest must contain hexadecimal bytes")
 
 
 def _json_string(value):
-    result = "\""
+    result = '"'
     for index in range(len(value)):
         char = value[index]
         if char == "\\":
             result += "\\\\"
-        elif char == "\"":
-            result += "\\\""
-        elif char == "\b":
-            result += "\\b"
-        elif char == "\f":
-            result += "\\f"
+        elif char == '"':
+            result += '\\"'
         elif char == "\n":
             result += "\\n"
         elif char == "\r":
             result += "\\r"
         elif char == "\t":
             result += "\\t"
-        elif ord(char) < 32:
-            result += "\\u00" + "0123456789abcdef"[ord(char) // 16] + "0123456789abcdef"[ord(char) % 16]
         else:
             result += char
-    return result + "\""
+    return result + '"'
 
 
 def nextest_bundle_json(version, platform, resources, environment):
@@ -93,6 +86,29 @@ def nextest_bundle_json(version, platform, resources, environment):
         ",\"bundle_resources\":[" + ",".join(resource_values) +
         "],\"bundle_version\":" + str(version) + "}"
     )
+
+
+def _nextest_archive_executable_impl(ctx):
+    archive = ctx.attrs.archive[DefaultInfo].default_outputs[0]
+    output = ctx.actions.declare_output(ctx.attrs.out)
+    ctx.actions.run(cmd_args([
+        "sh",
+        "-c",
+        'test -f "$1/cargo-nextest" && test "$(find "$1" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 && cp "$1/cargo-nextest" "$2" && chmod +x "$2"',
+        "nextest-archive-contract",
+        archive,
+        output.as_output(),
+    ], hidden = [archive, output.as_output()]), category = "nextest_archive_executable")
+    return [DefaultInfo(default_output = output), RunInfo(args = cmd_args(output))]
+
+
+nextest_archive_executable = rule(
+    impl = _nextest_archive_executable_impl,
+    attrs = {
+        "archive": attrs.dep(providers = [DefaultInfo]),
+        "out": attrs.string(),
+    },
+)
 
 
 def _nextest_system_tool_impl(ctx):
@@ -142,8 +158,6 @@ nextest_bundle_resource = rule(
 
 def _nextest_toolchain_impl(ctx):
     resources = []
-    if len(ctx.attrs.bundle_resources) == 0:
-        fail("nextest toolchain requires at least one bundle resource")
     seen_sources = {}
     seen_paths = {}
     for target in ctx.attrs.bundle_resources:
@@ -155,6 +169,8 @@ def _nextest_toolchain_impl(ctx):
             fail("duplicate bundle resource path: {}".format(resource.path))
         if not _is_safe_relative_path(source) or not _is_safe_relative_path(resource.path):
             fail("bundle resource paths must be normalized relative POSIX paths")
+        if resource.path == "workspace" or resource.path.startswith("workspace/") or resource.path == "meta" or resource.path.startswith("meta/") or resource.path == "target" or resource.path.startswith("target/") or resource.path == "manifest.json" or resource.path.startswith("manifest.json/"):
+            fail("bundle resource path is adapter-owned")
         _validate_digest(resource.digest)
         seen_sources[source] = True
         seen_paths[resource.path] = True
@@ -168,13 +184,13 @@ def _nextest_toolchain_impl(ctx):
         if len(item) != 3:
             fail("bundle_environment records must be [name, kind, value]")
         name, kind, value = item
-        if not name or name in seen_names or "=" in name or "\x00" in name:
-            fail("bundle environment names must be unique shell names")
+        reserved = ["PATH", "HOME", "TMPDIR", "CARGO_HOME", "CARGO_TARGET_DIR", "CARGO_MANIFEST_DIR", "CARGO_NET_OFFLINE", "CARGO_NET_GIT_FETCH_WITH_CLI"]
+        if not name or name in seen_names or name in reserved or name.startswith("BUCK2_NEXTEST_") or "=" in name or "\x00" in name:
+            fail("bundle environment names must be unique and not adapter-owned")
         if not (name[0].isalpha() or name[0] == "_"):
-            fail("bundle environment names must be unique shell names")
+            fail("bundle environment names must be unique ASCII shell names")
         for index in range(len(name)):
-            char = name[index]
-            if not ((char >= "a" and char <= "z") or (char >= "A" and char <= "Z") or (char >= "0" and char <= "9") or char == "_"):
+            if not (name[index].isalnum() or name[index] == "_"):
                 fail("bundle environment names must be unique ASCII shell names")
         if kind not in ["literal", "relative_path"] or "\x00" in value:
             fail("bundle environment records have an invalid kind or value")
@@ -199,7 +215,7 @@ nextest_toolchain = rule(
     is_toolchain_rule = True,
     attrs = {
         "cargo_nextest": attrs.exec_dep(providers = [RunInfo]),
-        "bundle_resources": attrs.list(attrs.exec_dep(providers = [NextestBuckBundleResourceInfo])),
+        "bundle_resources": attrs.list(attrs.exec_dep(providers = [NextestBuckBundleResourceInfo]), default = []),
         "bundle_environment": attrs.list(attrs.list(attrs.string()), default = []),
         "bundle_platform": attrs.string(default = "local-fixture-v1"),
     },

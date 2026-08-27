@@ -583,21 +583,13 @@ def _generic_path_prefix(left: str, right: str) -> bool:
     return is_prefix(path_parts(left), path_parts(right)) or is_prefix(path_parts(right), path_parts(left))
 
 
-def _generic_validate_environment(value: Any, name: str) -> dict[str, str]:
-    if not isinstance(value, dict):
-        die(f"{name} must be an object")
-    result = {}
-    for key, item in value.items():
-        if not isinstance(key, str) or _GENERIC_ENVIRONMENT_NAME.fullmatch(key) is None:
-            die(f"{name} contains an invalid environment name")
-        if key in _GENERIC_RESERVED_ENVIRONMENT_NAMES or key.startswith("BUCK2_NEXTEST_"):
-            die(f"{name} contains an adapter-owned environment name: {key}")
-        if not isinstance(item, str) or "\x00" in item:
-            die(f"{name}.{key} must be a NUL-free string")
-        if item.startswith("/") or any(part in ("", ".", "..") for part in PurePosixPath(item).parts if "/" in item):
-            die(f"{name}.{key} must not contain an unsafe path-like value")
-        result[key] = item
-    return result
+def _generic_toml_safe_path(value: str, name: str) -> str:
+    value = _generic_safe_relative_path(value, name)
+    if '"' in value or any(char.isspace() and char != " " for char in value):
+        die(f"{name} contains characters that cannot be represented safely in TOML")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        die(f"{name} contains characters that cannot be represented safely in TOML")
+    return value
 
 
 def validate_generic_manifest(path: Path) -> dict[str, Any]:
@@ -610,14 +602,17 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
     identities = set()
     executable_sources = set()
     destinations = {}
+    destination_names = {}
+    package_cwds = {}
+    cwd_packages = {}
     normalized = []
     for index, record in enumerate(records):
         prefix = f"records[{index}]"
         if not isinstance(record, dict):
             die(f"{prefix} must be an object")
-        required = {"package_identity", "owner_label", "binary_identity", "display_name", "target_kind", "executable", "runtime", "generated_outputs", "cwd", "platform", "environment"}
+        required = {"package_identity", "owner_label", "binary_identity", "display_name", "target_kind", "executable", "runtime", "generated_outputs", "cwd", "platform"}
         if set(record) != required:
-            die(f"{prefix} fields must be exactly {sorted(required)}")
+            die(f"{prefix} fields must be exactly {sorted(required)}; record-level environment is unsupported")
         package = expect(record["package_identity"], str, f"{prefix}.package_identity")
         owner = expect(record["owner_label"], str, f"{prefix}.owner_label")
         binary = expect(record["binary_identity"], str, f"{prefix}.binary_identity")
@@ -661,21 +656,34 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
         generated = expect(record["generated_outputs"], list, f"{prefix}.generated_outputs")
         if generated:
             die(f"{prefix}.generated_outputs are unsupported until their timing is proven")
-        cwd = _generic_safe_relative_path(record["cwd"], f"{prefix}.cwd")
-        paths.append((cwd, f"{prefix}.cwd"))
+        cwd = _generic_toml_safe_path(record["cwd"], f"{prefix}.cwd")
+        if package in package_cwds and package_cwds[package] != cwd:
+            die(f"{prefix}.cwd conflicts with the package cwd")
+        if package not in package_cwds:
+            for other_package, other_cwd in package_cwds.items():
+                if other_package != package and _generic_path_prefix(cwd, other_cwd):
+                    die(f"{prefix}.cwd overlaps another package cwd")
+            if cwd in cwd_packages and cwd_packages[cwd] != package:
+                die(f"{prefix}.cwd maps to more than one package identity")
+            cwd_packages[cwd] = package
+        package_cwds[package] = cwd
+        if any(other_package != package and _generic_path_prefix(cwd, path) for path, other_package in destinations.items()):
+            die(f"{prefix}.cwd overlaps a destination from another package")
         for left_index, (left, left_name) in enumerate(paths):
             if left in destinations:
-                die(f"duplicate destination {left}: {left_name} and {destinations[left]}")
-            destinations[left] = left_name
+                die(f"duplicate destination {left}: {left_name} and {destination_names[left]}")
             if left in _GENERIC_RESERVED_PATHS or _generic_path_prefix(left, "manifest.json"):
                 die(f"{left_name} conflicts with an adapter-owned path: {left}")
+            if any(other_package != package and _generic_path_prefix(left, other_cwd) for other_package, other_cwd in package_cwds.items()):
+                die(f"{left_name} overlaps a package cwd from another package")
+            destinations[left] = package
+            destination_names[left] = left_name
             for right, right_name in paths[:left_index]:
                 if _generic_path_prefix(left, right):
                     die(f"path-prefix overlap between {left_name} and {right_name}")
         platform_identity = expect(record["platform"], str, f"{prefix}.platform")
         if not platform_identity or "\x00" in platform_identity or any(char.isspace() for char in platform_identity):
             die(f"{prefix}.platform must be a non-empty opaque identity without whitespace")
-        environment = _generic_validate_environment(record["environment"], f"{prefix}.environment")
         normalized.append({
             "package_identity": package,
             "owner_label": owner,
@@ -688,7 +696,6 @@ def validate_generic_manifest(path: Path) -> dict[str, Any]:
             "generated_outputs": [],
             "cwd": cwd,
             "platform": platform_identity,
-            "environment": environment,
         })
     return {"schema_version": GENERIC_SCHEMA_VERSION, "records": normalized}
 

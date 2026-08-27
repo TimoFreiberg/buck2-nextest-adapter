@@ -24,8 +24,7 @@ GOOD_RECORD = {
     "runtime": [{"source": "source/runtime", "destination": "runtime/file", "kind": "regular_file"}],
     "generated_outputs": [],
     "cwd": "work",
-    "platform": "local-fixture-v1",
-    "environment": {"CONTRACT_VALUE": "declared"},
+    "platform": "aarch64-apple-darwin",
 }
 
 
@@ -75,6 +74,10 @@ def test_generic_manifest_positive_and_negative_cases() -> None:
             "generated-output": lambda item: item,
             "overlap-executable-parent": lambda item: item,
             "overlap-cwd-parent": lambda item: item,
+            "unsafe-cwd-quote": lambda item: item,
+            "unsafe-cwd-control": lambda item: item,
+            "cross-package-cwd": lambda item: item,
+            "cross-package-destination": lambda item: item,
         }
         for name in cases:
             candidate = copy.deepcopy(manifest)
@@ -97,6 +100,30 @@ def test_generic_manifest_positive_and_negative_cases() -> None:
             elif name == "overlap-cwd-parent":
                 candidate["records"][0]["cwd"] = "work/subdir"
                 candidate["records"][0]["runtime"][0]["destination"] = "work"
+            elif name == "unsafe-cwd-quote":
+                candidate["records"][0]["cwd"] = 'work"quoted'
+            elif name == "unsafe-cwd-control":
+                candidate["records"][0]["cwd"] = "work\nline"
+            elif name == "cross-package-cwd":
+                other = copy.deepcopy(GOOD_RECORD)
+                other["package_identity"] = "other-package"
+                other["binary_identity"] = "other-binary"
+                other["cwd"] = "work/nested"
+                other["executable"]["source"] = "other/bin"
+                other["executable"]["destination"] = "work/nested/bin/test"
+                other["runtime"][0]["source"] = "other/runtime"
+                other["runtime"][0]["destination"] = "work/nested/runtime/file"
+                candidate["records"].append(other)
+            elif name == "cross-package-destination":
+                other = copy.deepcopy(GOOD_RECORD)
+                other["package_identity"] = "other-package"
+                other["binary_identity"] = "other-binary"
+                other["cwd"] = "other-work"
+                other["executable"]["source"] = "other/bin"
+                other["executable"]["destination"] = "work/other-package/bin/test"
+                other["runtime"][0]["source"] = "other/runtime"
+                other["runtime"][0]["destination"] = "other-work/runtime/file"
+                candidate["records"].append(other)
             path.write_text(json.dumps(candidate), encoding="utf-8")
             process = subprocess.run(
                 [sys.executable, str(ROOT / "tools/nextest_buck_test_contract.py"), "--manifest", str(path), "--record-count", str(len(candidate["records"]))],

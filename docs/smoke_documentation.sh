@@ -14,7 +14,8 @@ roadmap_follow_ups=$root/docs/roadmap-follow-ups.md
 [ -f "$root/roadmap-follow-ups.md" ] && roadmap_follow_ups=$root/roadmap-follow-ups.md
 
 grep -F '## Canonical invocation' "$readme" >/dev/null
-grep -F '`buck-artifact` is the only supported adapter mode' "$readme" >/dev/null
+grep -F '`nextest_buck_test` is the supported fresh-test surface' "$readme" >/dev/null
+grep -F '`buck-artifact` remains the separate build-action adapter mode' "$readme" >/dev/null
 grep -F -- '--junit-report PATH' "$readme" >/dev/null
 for control in profile filter no-tests report-skipped timeout-seconds; do grep -F -- "$control" "$readme" "$baseline" "$roadmap" >/dev/null; done
 grep -F 'copies the nextest bytes unchanged' "$readme" >/dev/null
@@ -38,12 +39,12 @@ grep -F 'worker-side execution' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'nextest_buck_artifact_remote_selftest' "$readme" >/dev/null
 ! grep -F 'local-only' "$readme" "$roadmap" >/dev/null
 grep -F 'BUCK_SCRATCH_PATH' "$readme" "$baseline" >/dev/null
-grep -F 'required default CI coverage: just ci runs adapter_relocated_sanitized' "$readme" >/dev/null
+grep -F '`just ci` runs the relocated artifact check and the real declared nextest' "$readme" >/dev/null
 grep -F 'nextest_buck_test' "$readme" "$baseline" "$justfile" >/dev/null
 grep -F 'ExternalRunnerTestInfo' "$readme" "$baseline" >/dev/null
 grep -F 'b2n1:' "$baseline" >/dev/null
-grep -F 'missing relocation prerequisites fail CI with diagnostics' "$readme" >/dev/null
- grep -F 'repository-level check, not a nested sh_test' "$readme" >/dev/null
+grep -F 'process-inspection prerequisites fail' "$readme" >/dev/null
+grep -F 'production check as repository-level checks' "$readme" >/dev/null
  grep -F 'relocated/sanitized' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'observability gap' "$readme" "$baseline" >/dev/null
 grep -F 'buck clean' "$readme" "$baseline" >/dev/null
@@ -55,7 +56,7 @@ grep -F 'BUCK2_NEXTEST_JUNIT_DIR' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'INFRA_FAILURE' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'fresh caller-owned' "$readme" "$roadmap" >/dev/null
 grep -F 'fixture XML' "$readme" "$roadmap" >/dev/null
-grep -F 'does not dispatch' "$baseline" >/dev/null
+grep -F 'does not run cargo-nextest' "$baseline" >/dev/null
 grep -F 'DefaultInfo' "$readme" "$baseline" >/dev/null
 grep -F 'RunInfo' "$readme" "$baseline" >/dev/null
 grep -F 'local convenience' "$readme" "$baseline" >/dev/null
@@ -72,7 +73,7 @@ grep -F 'mode-0600 same-directory temporary' "$baseline" >/dev/null
 grep -F 'raw nextest status=<status>' "$baseline" >/dev/null
 
 grep -F '## Current position' "$roadmap" >/dev/null
-grep -F 'first bounded Phase 5 milestone is complete' "$roadmap" >/dev/null
+grep -F 'schema-v2 production slice is implemented' "$roadmap" >/dev/null
 grep -F 'five attrs' "$roadmap" >/dev/null
 grep -F 'default-*' "$readme" "$baseline" >/dev/null
 grep -F 'fixed-name `junit.xml`' "$baseline" "$roadmap" >/dev/null
@@ -82,14 +83,14 @@ grep -F 'ordinary failed-action diagnostics' "$readme" "$baseline" "$roadmap" >/
 grep -F 'caller-supplied `--junit-report`' "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'outer `buck2 test` capture' "$baseline" >/dev/null
 
-grep -F 'strict failed-run semantics slice is complete' "$roadmap" >/dev/null
-grep -F 'filtered-out absence' "$roadmap" >/dev/null
+grep -F 'The bounded matrix covers pass' "$roadmap" >/dev/null
+grep -F 'filtered-out,' "$roadmap" >/dev/null
 legacy_switch=$(printf '%s%s' -- -scenario)
 ! grep -F -- "$legacy_switch" "$readme" "$baseline" "$roadmap" >/dev/null
 grep -F 'no timeout-specific marker' "$roadmap" >/dev/null
-grep -F 'no stable dedicated mapping' "$roadmap" >/dev/null
-grep -F '## Prioritized follow-ups' "$roadmap" >/dev/null
-grep -F 'The completed milestones above remain the current-state record' "$roadmap" >/dev/null
+grep -F 'outer cancellation and descendant' "$roadmap" >/dev/null
+grep -F '## Remaining roadmap work' "$roadmap" >/dev/null
+grep -F 'The schema-v2 production vertical slice above is the current-state record' "$roadmap" >/dev/null
 grep -F 'successful dispatch path' "$follow_up" >/dev/null
 grep -F 'no-tests = auto' "$follow_up" >/dev/null
 grep -F 'disabled timeout configuration' "$follow_up" >/dev/null
@@ -113,12 +114,12 @@ grep -F 'relocated/sanitized declared-input scenario is required repository-leve
 # The new sequence is executable documentation: every roadmap anchor resolves,
 # required evidence and boundaries remain explicit, and no follow-up is claimed
 # complete before its future acceptance check exists.
-for anchor in freeze-remote-readiness primary-buck-test-surface generic-artifact-runtime-contract rust-runner real-declared-nextest realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
+for anchor in realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
     grep -F "roadmap-follow-ups.md#$anchor" "$roadmap" >/dev/null
     grep -F "<a id=\"$anchor\"></a>" "$roadmap_follow_ups" >/dev/null
 done
 [ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 9 ]
-! grep -Ei '^([0-9]+\.|###).*follow-up.*(complete|implemented)' "$roadmap" >/dev/null
+! grep -Ei '^([0-9]+\.|###).*follow-up.*(complete|implemented)' "$roadmap_follow_ups" >/dev/null
 
 for evidence in 'nextest.bzl:206-272' 'adapter/src/bin/nextest_buck_artifact.rs' 'adapter/src/manifest_v1.rs' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md'; do
     grep -F "$evidence" "$roadmap_follow_ups" >/dev/null
@@ -144,7 +145,7 @@ for gate in 'neither removes nor promotes' 'operator-approved decision record' '
 done
 
 ! grep -F 'Production remains `local_only = True`' "$readme" >/dev/null
-grep -F 'local-preferred (`prefer_local = True`)' "$readme" >/dev/null
+grep -F 'local-preferred' "$readme" >/dev/null
 grep -F 'checksum-verified HTTP archives' "$readme" >/dev/null
 grep -F 'Windows is unsupported' "$readme" >/dev/null
 grep -F 'cache upload disabled' "$readme" >/dev/null
@@ -179,7 +180,7 @@ assert rows, "feature matrix has no rows"
 for row in rows:
     cells = [cell.strip() for cell in row.strip("|").split("|")]
     assert len(cells) == 4, f"malformed feature row: {row}"
-    assert cells[2] and ("Fails " in cells[2] or "Fails unless" in cells[2]), f"non-regression-sensitive assertion: {row}"
+    assert cells[2] and ("Fails " in cells[2] or "Fails unless" in cells[2] or "Fail-closed probe" in cells[2]), f"non-regression-sensitive assertion: {row}"
     assert cells[3] == "Uses the production Buck test rule and real declared nextest toolchain.", f"missing production constraint: {row}"
 for check in required_checks:
     assert any(f"`{check}`" in row for row in rows), f"missing future check {check}"

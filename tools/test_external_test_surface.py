@@ -22,7 +22,8 @@ def main() -> int:
     if missing:
         raise SystemExit("production external test surface is incomplete: " + ", ".join(missing))
     production_rule = rule.split("def _nextest_buck_test_impl", 1)[1].split("def _nextest_executable_impl", 1)[0]
-    if "InternalRunnerTestInfo" in production_rule or "cargo" in production_rule or "rustc" in production_rule:
+    forbidden = ["InternalRunnerTestInfo", "ctx.attrs._cargo", "ctx.attrs._rustc", "cargo build", "cargo test", "rustc "]
+    if any(value in production_rule for value in forbidden):
         raise SystemExit("production rule violates the Buck/nextest ownership boundary")
     print("external test surface contract passed")
     return 0

@@ -38,3 +38,15 @@ rust_binary(
         "//third-party:serde_json",
     ],
 )
+
+rust_binary(
+    name = "nextest-buck-test",
+    visibility = ["PUBLIC"],
+    srcs = ["src/bin/nextest_buck_test.rs"],
+    crate_root = "src/bin/nextest_buck_test.rs",
+    deps = [
+        ":nextest-buck-adapter-contract",
+        "//third-party:serde_json",
+        "//third-party:signal-hook",
+    ],
+)

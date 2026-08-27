@@ -55,7 +55,25 @@ pub fn validate_report_xml(input: &[u8]) -> ContractResult<ValidatedReport> {
                     ));
                 }
             }
-            Ok(Event::Text(_) | Event::CData(_) | Event::Comment(_) | Event::Decl(_)) => {}
+            Ok(Event::Text(event)) => {
+                if root.is_none()
+                    || (stack.is_empty() && !event.as_ref().iter().all(u8::is_ascii_whitespace))
+                {
+                    return Err(ContractError::invalid(
+                        "XML has non-whitespace data outside its root",
+                    ));
+                }
+            }
+            Ok(Event::CData(event)) => {
+                if root.is_none()
+                    || (stack.is_empty() && !event.as_ref().iter().all(u8::is_ascii_whitespace))
+                {
+                    return Err(ContractError::invalid(
+                        "XML has non-whitespace data outside its root",
+                    ));
+                }
+            }
+            Ok(Event::Comment(_) | Event::Decl(_)) => {}
             Ok(Event::DocType(_)) => {
                 return Err(ContractError::invalid("XML doctypes are not allowed"))
             }
@@ -98,5 +116,10 @@ mod tests {
                 .test_suites,
             1
         );
+    }
+    #[test]
+    fn non_whitespace_outside_root_is_rejected() {
+        assert!(validate_report_xml(br#"<testsuites/>trailing"#).is_err());
+        assert!(validate_report_xml(br#"leading<testsuites/>"#).is_err());
     }
 }

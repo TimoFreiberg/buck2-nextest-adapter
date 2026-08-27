@@ -169,7 +169,7 @@ BUCK_SCRATCH_PATH="buck-scratch" BUCK_DEFAULT_RUNTIME_RESOURCES="$root" \
     --artifact "$artifact_path" --manifest "$manifest_path" --cargo-baseline "$cargo_baseline" \
     --binary-baseline "$binary_baseline" --tests-baseline "$tests_baseline" \
     --cargo-nextest-argv "$nextest_path" --end-argv \
-    --bundle-json "{\"bundle_environment\":[],\"bundle_platform\":\"relocated-v1\",\"bundle_resources\":[{\"digest\":\"sha256:$runtime_digest:$runtime_size\",\"path\":\"runtime/buck2_artifact_runtime.txt\",\"source\":\"runtime/buck2_artifact_runtime.txt\"}],\"bundle_version\":1}" \
+    --bundle-json "{\"bundle_environment\":[],\"bundle_platform\":\"relocated-v1\",\"bundle_resources\":[{\"digest\":\"sha256:$runtime_digest:$runtime_size\",\"path\":\"bundle/buck2_artifact_runtime.txt\",\"source\":\"runtime/buck2_artifact_runtime.txt\"}],\"bundle_version\":1}" \
     --bundle-resources "$runtime_resource" --end-bundle-resources \
     --runtime-resource "$runtime_resource" \
     --junit-report "$report" >"$out" 2>&1

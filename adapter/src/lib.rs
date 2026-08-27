@@ -6,6 +6,7 @@ pub mod export;
 pub mod json;
 pub mod manifest_v1;
 pub mod manifest_v2;
+pub mod nextest_v2;
 pub mod report;
 
 pub use error::{ContractError, ContractResult};
@@ -13,8 +14,6 @@ pub use error::{ContractError, ContractResult};
 #[cfg(test)]
 mod contract_tests {
     use super::manifest_v2::*;
-    use std::collections::BTreeMap;
-
     fn path(source: &str, destination: &str) -> PathRecord {
         PathRecord {
             source: source.into(),
@@ -29,12 +28,11 @@ mod contract_tests {
             binary_identity: binary.into(),
             display_name: binary.into(),
             target_kind: "test".into(),
-            executable: path("bin/source", "bin/test"),
+            executable: path("bin/source", "work/bin/test"),
             runtime: vec![],
             generated_outputs: vec![],
             cwd: "work".into(),
             platform: "x86_64-unknown-linux-gnu".into(),
-            environment: BTreeMap::new(),
             id: None,
         }
     }
@@ -55,6 +53,46 @@ mod contract_tests {
             decode_semantic_id("b2n1:p=package%20name;o=%2f%2Ftests%3Aunit;b=bin%2F%CE%B1")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn schema_v2_rejects_unsafe_cwds_and_cross_package_overlaps() {
+        for cwd in ["work\"quote", "work\nline", "work\u{0007}bell"] {
+            let mut candidate = record("one");
+            candidate.cwd = cwd.into();
+            assert!(ManifestV2 {
+                schema_version: 2,
+                records: vec![candidate],
+            }
+            .validate()
+            .is_err(), "cwd should be rejected: {cwd:?}");
+        }
+
+        let mut nested = record("two");
+        nested.package_identity = "other".into();
+        nested.binary_identity = "two".into();
+        nested.display_name = "two".into();
+        nested.cwd = "work/nested".into();
+        nested.executable = path("bin/source-two", "work/nested/bin/test");
+        assert!(ManifestV2 {
+            schema_version: 2,
+            records: vec![record("one"), nested],
+        }
+        .validate()
+        .is_err());
+
+        let mut cwd_overlaps_destination = record("two");
+        cwd_overlaps_destination.package_identity = "other".into();
+        cwd_overlaps_destination.binary_identity = "two".into();
+        cwd_overlaps_destination.display_name = "two".into();
+        cwd_overlaps_destination.cwd = "work/bin".into();
+        cwd_overlaps_destination.executable = path("bin/source-two", "work/bin/test-two");
+        assert!(ManifestV2 {
+            schema_version: 2,
+            records: vec![record("one"), cwd_overlaps_destination],
+        }
+        .validate()
+        .is_err());
     }
 
     #[test]

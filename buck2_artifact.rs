@@ -29,5 +29,6 @@ fn timeout_case() {
         use std::io::Write;
         file.write_all(b"ready\n").expect("timeout readiness payload");
     }
+    println!("buck2-nextest-artifact: timeout-test");
     std::thread::sleep(std::time::Duration::from_secs(10));
 }

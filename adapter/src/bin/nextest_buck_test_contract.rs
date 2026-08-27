@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const PROVIDER_LINE: &str = "buck2-nextest-contract: provider=NextestBuckTestBinaryInfo";
-const DISPATCH_LINE: &str = "buck2-nextest-contract: dispatch=deferred-nextest-suite";
+const DISPATCH_LINE: &str = "buck2-nextest-contract: dispatch=contract-validation-only";
 
 struct Args {
     manifest: PathBuf,
@@ -230,12 +230,11 @@ mod tests {
                         "binary_identity": "one",
                         "display_name": "one",
                         "target_kind": "test",
-                        "executable": {"source": "bin/source-one", "destination": "bin/one", "kind": "regular_file"},
+                        "executable": {"source": "bin/source-one", "destination": "work/bin/one", "kind": "regular_file"},
                         "runtime": [],
                         "generated_outputs": [],
-                        "cwd": "work/one",
-                        "platform": "x86_64-unknown-linux-gnu",
-                        "environment": {}
+                        "cwd": "work",
+                        "platform": "x86_64-unknown-linux-gnu"
                     },
                     {
                         "package_identity": "beta",
@@ -243,12 +242,11 @@ mod tests {
                         "binary_identity": "two",
                         "display_name": "two",
                         "target_kind": "test",
-                        "executable": {"source": "bin/source-two", "destination": "bin/two", "kind": "regular_file"},
+                        "executable": {"source": "bin/source-two", "destination": "other-work/two/bin/two", "kind": "regular_file"},
                         "runtime": [],
                         "generated_outputs": [],
-                        "cwd": "work/two",
-                        "platform": "x86_64-unknown-linux-gnu",
-                        "environment": {}
+                        "cwd": "other-work/two",
+                        "platform": "x86_64-unknown-linux-gnu"
                     }
                 ]
             }"#,

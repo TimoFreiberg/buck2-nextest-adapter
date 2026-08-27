@@ -7,12 +7,11 @@
       "binary_identity": "alpha",
       "display_name": "same-display-name",
       "target_kind": "test",
-      "executable": {"source": "bin/alpha", "destination": "bin/alpha", "kind": "regular_file"},
+      "executable": {"source": "bin/alpha", "destination": "work/bin/alpha", "kind": "regular_file"},
       "runtime": [{"source": "runtime/alpha.txt", "destination": "runtime/alpha.txt", "kind": "regular_file"}],
       "generated_outputs": [],
-      "cwd": "work/alpha",
-      "platform": "local-fixture-v1",
-      "environment": {"NEXTEST_CONTRACT": "alpha"}
+      "cwd": "work",
+      "platform": "aarch64-apple-darwin"
     },
     {
       "package_identity": "demo-package",
@@ -20,12 +19,11 @@
       "binary_identity": "beta",
       "display_name": "same-display-name",
       "target_kind": "test",
-      "executable": {"source": "bin/beta", "destination": "bin/beta", "kind": "regular_file"},
+      "executable": {"source": "bin/beta", "destination": "work/bin/beta", "kind": "regular_file"},
       "runtime": [{"source": "runtime/beta.txt", "destination": "runtime/beta.txt", "kind": "regular_file"}],
       "generated_outputs": [],
-      "cwd": "work/beta",
-      "platform": "local-fixture-v1",
-      "environment": {"NEXTEST_CONTRACT": "beta"}
+      "cwd": "work",
+      "platform": "aarch64-apple-darwin"
     }
   ]
 }
