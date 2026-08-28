@@ -81,11 +81,9 @@ test -d "$root/buck-out/z-old-descendant"
 # A similarly prefixed sibling is outside the protected path boundary.
 make_cache z-old-sibling
 touch -t 202001010000 "$root/buck-out/z-old-sibling" "$root/buck-out/z-old-sibling/CACHEDIR.TAG"
+mkdir "$root/buck-out/z-old-sibling-extra"
 : >"$root/old-present"
-foreign_root=$(mktemp -d "${TMPDIR:-/tmp}/buck-clean-foreign.XXXXXX")
-mkdir "$foreign_root/z-old-sibling-extra"
-BUCK_CLEAN_DAEMON_ISOLATION=z-old-sibling BUCK_CLEAN_DAEMON_CWD="$foreign_root/z-old-sibling-extra" PATH="$root:$shim:$PATH" run >/dev/null
-rm -rf "$foreign_root"
+BUCK_CLEAN_DAEMON_ISOLATION=z-old-sibling BUCK_CLEAN_DAEMON_CWD="$root/buck-out/z-old-sibling-extra" PATH="$root:$shim:$PATH" run >/dev/null
 grep -F -- '--isolation-dir z-old-sibling clean' "$action_log"
 ! test -d "$root/buck-out/z-old-sibling"
 
