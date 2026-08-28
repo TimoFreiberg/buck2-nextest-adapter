@@ -43,7 +43,7 @@ ps_shim="$root/ps"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$BUCK_CLEAN_DAEMON_PID buck2d[fixture] --isolation-dir z-old daemon"' >"$ps_shim"
 chmod +x "$ps_shim"
 lsof_shim="$root/lsof"
-printf '%s\n' '#!/usr/bin/env bash' 'printf "n%s\\n" "$(CDPATH= cd -- "$BUCK_CLEAN_PROJECT_ROOT" && pwd -P)"' >"$lsof_shim"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "n%s\\n" "$(CDPATH= cd -- "${BUCK_CLEAN_DAEMON_CWD:-$BUCK_CLEAN_PROJECT_ROOT}" && pwd -P)"' >"$lsof_shim"
 chmod +x "$lsof_shim"
 export BUCK_CLEAN_DAEMON_PID="$daemon_pid"
 PATH="$root:$shim:$PATH" run >/dev/null
@@ -56,6 +56,14 @@ test -d "$root/buck-out/v2"
 test -d "$root/buck-out/z-invalid"
 test -d "$root/buck-out/z-old"
 ! test -d "$root/buck-out/a-new"
+
+# A matching daemon belonging to another project must not protect this cache.
+: >"$root/old-present"
+foreign_root=$(mktemp -d "${TMPDIR:-/tmp}/buck-clean-foreign.XXXXXX")
+BUCK_CLEAN_DAEMON_CWD="$foreign_root" PATH="$root:$shim:$PATH" run >/dev/null
+rm -rf "$foreign_root"
+grep -F -- '--isolation-dir z-old clean' "$action_log"
+! test -d "$root/buck-out/z-old"
 
 for target in 4 11; do
     if BUCK_CLEAN_TARGET_GIB="$target" BUCK_CLEAN_PROJECT_ROOT="$root" BUCK2="$fake_buck" "$script" >/dev/null 2>&1; then

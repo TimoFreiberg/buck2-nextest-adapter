@@ -60,7 +60,11 @@ active_isolation() {
             printf '%s\n' 'cannot identify Buck daemon project roots; refusing destructive cleanup' >&2
             return 2
         fi
-        if [[ "$cwd" == "$project_root" ]]; then return 0; fi
+        if [[ "$cwd" == "$project_root" ||
+            "$cwd" == "$buck_out/$isolation" ||
+            "$cwd" == "$buck_out/$isolation/"* ]]; then
+            return 0
+        fi
     done < <(awk -v wanted="$isolation" '
         /buck2d\[/ {
             for (i = 2; i < NF; i++) {
