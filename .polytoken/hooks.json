@@ -1,0 +1,9 @@
+[
+  {
+    "name": "clean-stale-buck-output",
+    "event": "post_model_turn",
+    "handler": {
+      "bash": "cd \"$POLYTOKEN_PROJECT_DIR\" && just buck-clean-stale"
+    }
+  }
+]
