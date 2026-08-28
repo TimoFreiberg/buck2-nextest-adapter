@@ -37,6 +37,30 @@ Current implementation evidence includes the build-output rule in
 fixture in `tools/nextest_cargo_nextest_v1.py:28-56`, and the roadmap state in
 `docs/nextest-buck2-roadmap.md`.
 
+<a id="per-test-isolation-cleanup"></a>
+## Immediate maintenance: clean disposable Buck isolations after each test
+
+**Purpose and evidence.** Repository tests create uniquely named Buck
+isolations, and those outputs accumulate even though most scenarios will never
+reuse them. The bounded stale-isolation cleaner remains necessary recovery for
+interrupted, crashed, or legacy runs, but it should not be the normal lifecycle.
+
+**Desired end state.** Every test helper that owns a disposable isolation invokes
+Buck's `clean` for that isolation after its Buck children have exited. A failure
+keeps diagnostics in its private temporary directory while still releasing the
+Buck isolation. A scenario that intentionally reuses an isolation cleans it only
+after its final cache assertion.
+
+**Implementation boundaries.** Use `buck2 --isolation-dir <name> clean`; never
+remove Buck output with `rm -rf`. Keep cleanup inside a trap/finalizer that runs
+after child quiescence, preserve `v2` and caller-shared isolations, and retain the
+bounded stale-cleanup command for abandoned directories.
+
+**Acceptance evidence.** The relevant test helpers leave no disposable custom
+isolation after successful and expected-failure runs, cache-reuse scenarios
+clean only after their final assertion, and the existing stale-cleanup contract
+continues to cover interrupted or legacy output.
+
 <a id="freeze-remote-readiness"></a>
 ## 1. Freeze further remote-readiness expansion temporarily
 
@@ -428,6 +452,6 @@ resource, recipe, CI entry, or stale smoke/prose reference.
 
 | Group | Work |
 |---|---|
-| **next** | Freeze additional RE expansion; define the primary Buck test surface; generalize the artifact/runtime contract; then implement the Rust runner; prove the real declared nextest fixture/toolchain path. |
+| **next** | Clean disposable Buck isolations after each test; freeze additional RE expansion; define the primary Buck test surface; generalize the artifact/runtime contract; then implement the Rust runner; prove the real declared nextest fixture/toolchain path. |
 | **after the local production path** | Support realistic Rust runtime closure; prove core nextest features; simplify compatibility and consumer setup; reassess the integration; resume live RE platform, materialization, cancellation, failed-result, and cache validation. |
 | **deferred until evidence requires it** | Direct nextest embedding or forking; per-test Buck delegation; persistent workers; persistent nextest records; richer event/result protocols. |

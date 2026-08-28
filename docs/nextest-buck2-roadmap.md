@@ -326,10 +326,11 @@ The schema-v2 production vertical slice above is the current-state record. The
 following items remain ordered follow-ups; detailed rationale, boundaries, and
 acceptance evidence live in [`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
 
-1. **[Support the remaining realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed `DistInfo.nondebug_runtime_files` and generated-resource proof to shared libraries, build-script outputs, provider-derived environment/platform information, and other transitive runtime semantics.
-2. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
-3. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
-4. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
+1. **[Clean disposable Buck isolations after each test](roadmap-follow-ups.md#per-test-isolation-cleanup).** Have test helpers invoke Buck cleanup after their children exit, while retaining the bounded stale-isolation cleaner for interrupted or legacy runs.
+2. **[Support the remaining realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed `DistInfo.nondebug_runtime_files` and generated-resource proof to shared libraries, build-script outputs, provider-derived environment/platform information, and other transitive runtime semantics.
+3. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
+4. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
+5. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
 
 The existing declared-JUnit build action remains behind its separate,
 evidence-backed operator decision gate. Direct nextest embedding or forking,

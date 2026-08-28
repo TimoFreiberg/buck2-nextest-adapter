@@ -120,17 +120,17 @@ grep -F 'shared-library or build-script-specific' "$roadmap_follow_ups" >/dev/nu
 # The new sequence is executable documentation: every roadmap anchor resolves,
 # required evidence and boundaries remain explicit, and no follow-up is claimed
 # complete before its future acceptance check exists.
-for anchor in realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
+for anchor in per-test-isolation-cleanup realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
     grep -F "roadmap-follow-ups.md#$anchor" "$roadmap" >/dev/null
     grep -F "<a id=\"$anchor\"></a>" "$roadmap_follow_ups" >/dev/null
 done
-[ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 9 ]
+[ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 10 ]
 ! grep -Ei '^([0-9]+\.|###).*follow-up.*(complete|implemented)' "$roadmap_follow_ups" >/dev/null
 
 for evidence in 'nextest.bzl:206-272' 'adapter/src/bin/nextest_buck_artifact.rs' 'adapter/src/manifest_v1.rs' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md'; do
     grep -F "$evidence" "$roadmap_follow_ups" >/dev/null
 done
-for heading in '## Architectural invariants' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement a Rust runner' '## 5. Prove real nextest through the declared production path' '## 6. Support a realistic Buck Rust runtime closure' '## 7. Prove the core nextest value proposition' '## 8. Simplify the compatibility layer and consumer setup' '## 9. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
+for heading in '## Architectural invariants' '## Immediate maintenance: clean disposable Buck isolations after each test' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement a Rust runner' '## 5. Prove real nextest through the declared production path' '## 6. Support a realistic Buck Rust runtime closure' '## 7. Prove the core nextest value proposition' '## 8. Simplify the compatibility layer and consumer setup' '## 9. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
     grep -F "$heading" "$roadmap_follow_ups" >/dev/null
 done
 for invariant in 'Buck remains authoritative for build artifacts' 'Nextest remains authoritative for test discovery' 'must not invoke Cargo or rustc' 'No source-tree or arbitrary unmanaged `buck-out` writes' 'Fresh test execution must use Buck' 'Preserve exact nextest JUnit bytes' 'Do not' 'Process-tree cleanup, cancellation, and no-orphan behavior' 'Consumer setup should become simpler'; do
