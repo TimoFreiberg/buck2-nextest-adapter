@@ -3,9 +3,13 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 project_root := justfile_directory()
 buck := env_var_or_default("BUCK2", "buck2")
 
-# Remove Buck artifacts according to the selected Buck's stale retention policy.
+# Reclaim old custom Buck isolation caches while preserving v2 and active runs.
+# Full clean is intentional: deferred materialization makes --stale a no-op here.
 buck-clean-stale:
-    BUCK2={{quote(buck)}} {{quote(buck)}} clean --stale
+    BUCK2={{quote(buck)}} bash {{project_root}}/buck2_nextest_clean_stale.sh
+
+buck-clean-stale-contract:
+    sh {{project_root}}/tools/buck2_nextest_clean_stale_contract.sh
 
 # Run every repository check, including the repository-level Buck action inspection.
 ci: repository_hygiene _relocation-preflight _ci-buck2_nextest_executor_junit _ci-nextest_real_declared_toolchain _ci-nextest_runtime_closure _ci-nextest_runtime_provider_contract _ci-nextest_buck_test_relocated_sanitized _ci-nextest_cancellation_cleanup _buck-ci _ci-nextest_buck_artifact_action_inspection _ci-nextest_buck_artifact_consumer_inspection _ci-nextest_buck_artifact_action_metadata _ci-nextest_buck_artifact_action_metadata_check _ci-nextest_buck_artifact_junit_materialization _ci-nextest_buck_artifact_junit_local _ci-nextest_buck_artifact_junit_failure _ci-nextest_buck_artifact_junit_action_key _ci-nextest_buck_artifact_junit_cache _ci-nextest_buck_artifact_junit_concurrent_buck _ci-adapter_relocated_sanitized
