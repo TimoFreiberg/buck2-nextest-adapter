@@ -61,6 +61,62 @@ the no-resource control fails in the named test. Broader runtime semantics
 build-script outputs, and remote validation), plus retries/groups/capture and
 compatibility simplification, remain future work.
 
+The implemented schema-v2 `nextest_buck_test_binary`/`nextest_buck_test`
+record-and-suite surface is the working production slice, not the selected
+long-term consumer API. The selected, not-yet-implemented interface is one real,
+queryable, provider-backed Buck test target over existing ordinary `rust_test`
+targets:
+
+```python
+rust_test(name = "parser_tests", ...)
+rust_test(name = "storage_tests", ...)
+
+nextest_test(
+    name = "tests",
+    tests = ["//parser:tests", "//storage:tests"],
+)
+```
+
+The normal invocation is `buck2 test //:tests`. Explicit `tests = [...]`
+membership may cross package boundaries; one queryable suite target produces
+one nextest invocation covering every selected binary. Buck analysis remains authoritative
+for the executable, runtime closure, effective environment, and configured
+artifact target/runner metadata through a narrow versioned Rust-test provider.
+The rule derives owner, package, binary/display defaults, and a collision-free
+synthetic CWD rather than asking consumers to repeat them or inferring them from
+output paths or ambient state.
+
+A declaration macro may later be optional sugar, but a macro-generated
+`rust_test` plus suite is **not canonical**: it creates a second real test target
+and risks duplicate broad-pattern execution and query noise. Automatic package
+discovery is **rejected as primary**, as are one invocation per Rust binary and
+BXL as the primary lifecycle. A global executor that transforms ordinary
+`rust_test` specs is **rejected as primary** because it receives opaque execution
+handles rather than analysis providers, would take on metadata aggregation and
+result mapping, leaves runtime-closure semantics unresolved, and weakens the
+version-pinned Execute2/remote story. Copying or forking the Rust prelude is not
+a fallback.
+
+Cargo-nextest 0.9.143 provides one inherited process environment and at most one
+target platform per invocation. Selected targets must therefore have equal
+provider-normalized effective environments, artifact runtime triples, and
+compatible normalized runner requirements; analysis fails on disagreement
+rather than merging, guessing, partitioning, or using the first record.
+Validated suite additions apply uniformly after that check and cannot set
+adapter/nextest-owned `CARGO_*`, `NEXTEST_*`, `LD_*`, or `DYLD_*` variables.
+Rust artifact runtime triple/runner metadata, cargo-nextest `bundle_platform`
+identity, and Buck execution/RE platform are three distinct concepts.
+
+Stock `buck2 test //:tests` requires no custom executor: the runner writes JUnit
+to Buck-owned private scratch, validates it, uses nextest status and diagnostics,
+and removes the report during cleanup without promising caller-visible XML.
+Caller-visible JUnit remains opt-in: when the pinned executor supplies its
+declared-directory capability, the same runner also publishes the unchanged
+validated XML through the existing secure path. The separate
+`nextest_buck_artifact_junit` decision gate is unchanged. Eventual production
+defaults are `filter = "all()"` and `no_tests = "fail"`; both are overridable,
+behavior-affecting settings; current fixture defaults remain unchanged.
+
 ## Terminology correction
 
 The planned result format is **JUnit XML**, not Javadoc XML.
@@ -327,12 +383,18 @@ following items remain ordered follow-ups; detailed rationale, boundaries, and
 acceptance evidence live in [`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
 
 1. **[Clean disposable Buck isolations after each test](roadmap-follow-ups.md#per-test-isolation-cleanup).** Have test helpers invoke Buck cleanup after their children exit, while retaining the bounded stale-isolation cleaner for interrupted or legacy runs.
-2. **[Support the remaining realistic Buck Rust runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed `DistInfo.nondebug_runtime_files` and generated-resource proof to shared libraries, build-script outputs, provider-derived environment/platform information, and other transitive runtime semantics.
-3. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
-4. **[Simplify compatibility and consumer setup](roadmap-follow-ups.md#simplify-compatibility).** Reassess unnecessary consumer inputs, digests, bundle requirements, fault seams, and implementation-pinning tests only when behavioral replacements exist.
-5. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
+2. **[Preserve the remote-expansion freeze](roadmap-follow-ups.md#freeze-remote-readiness).** Keep the fail-closed gate and blocker evidence without expanding the remote claim before the local consumer path is proved.
+3. **[Establish the provider contract and selected public surface](roadmap-follow-ups.md#primary-buck-test-surface).** Pass `buck2_nextest_rust_provider_compatibility`, then define provider-backed `nextest_test(name, tests = [...])` over existing `rust_test` targets.
+4. **[Prove the consumer surface](roadmap-follow-ups.md#consumer-surface).** Add the cross-package `buck2_nextest_consumer_surface` fixture and its environment, platform/runner, ambient-Cargo, identity, cardinality, defaults, and stock/opt-in report-mode checks.
+5. **[Prove the real declared path](roadmap-follow-ups.md#real-declared-nextest).** Run the actual declared cargo-nextest toolchain through the selected production lifecycle without ambient fallback.
+6. **[Prove the realistic runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed resource proof through the selected provider to shared libraries, build-script outputs, effective environment, and artifact target/runner metadata.
+7. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
+8. **[Retire obsolete compatibility surfaces](roadmap-follow-ups.md#simplify-compatibility).** Make the low-level record rule internal or remove it only after provider-backed behavioral replacements exist; then reassess unnecessary inputs, fault seams, and implementation-pinning tests.
+9. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
 
-The existing declared-JUnit build action remains behind its separate,
+The consumer fixture depends on provider compatibility and realistic runtime
+evidence; ergonomic syntax alone cannot advance production-readiness claims. The
+existing declared-JUnit build action remains behind its separate,
 evidence-backed operator decision gate. Direct nextest embedding or forking,
 per-test Buck delegation, persistent workers/records, and richer event/result
 protocols remain explicitly deferred until evidence requires them.

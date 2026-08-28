@@ -77,7 +77,8 @@ test rule, real declared nextest path, and realistic runtime closure pass.
 or completion of Phase 8. Do not weaken fail-closed behavior, claim worker-side
 execution, or add a worker for an empty RE platform.
 
-**Dependencies/order.** Resume remote work only after follow-ups 2, 3, 5, and 6
+**Dependencies/order.** Resume remote work only after the provider gate,
+consumer surface, real declared path, realistic closure, and core nextest checks
 have produced their acceptance evidence.
 
 **Acceptance evidence.** Existing remote control-flow checks remain registered.
@@ -124,82 +125,219 @@ process ownership out of Buck.
 
 **Purpose and evidence.** `nextest.bzl:26-77` currently exposes a declared JUnit
 build action, while fresh test execution belongs to Buck's test lifecycle. The
-current action is documented history and must not be silently removed or
-promoted by this roadmap update.
+implemented `nextest_buck_test_binary` records plus `nextest_buck_test` suite are
+the working production slice, not the selected consumer API. The current action
+is documented history and must not be silently removed or promoted by this
+roadmap update.
 
-**Desired end state.** A reusable Buck2 test rule/provider runs fresh nextest
-execution through `buck2 test`, with Buck owning declared inputs, outputs,
-resources, and cancellation while nextest retains per-test execution authority.
+**Desired end state.** The selected public rule is a real, queryable Buck test
+target over explicit dependencies on existing ordinary `rust_test` targets from the bundled prelude:
 
-**Implementation boundaries.** This change neither removes nor promotes the
-existing declared JUnit build action. Before either surface changes, an
-operator-approved decision record must name the owner/approver, selected outcome, passing evidence, migration/documentation consequences, and explicit removal or support boundary. The selected outcome must be one of: classify and remove the
-old action as temporary, retain it as a separately documented optional reporting
-API, or keep it supported. The evidence must cover the real toolchain, documented
-statuses, unchanged JUnit bytes and diagnostics, cancellation, and fresh-execution
+```python
+rust_test(name = "parser_tests", ...)
+rust_test(name = "storage_tests", ...)
+
+nextest_test(
+    name = "suite",
+    tests = ["//parser:tests", "//storage:tests"],
+)
+```
+
+`tests = [...]` supports cross-package membership. `buck2 test //:suite` runs one
+suite target and one nextest invocation covering all selected binaries through
+the normal Buck test lifecycle. Users do not author adapter record targets.
+Production-facing defaults are eventually `filter = "all()"` and
+`no_tests = "fail"`; both are explicit, overridable, behavior-affecting settings.
+Caller-visible JUnit remains opt-in. This is future behavior: current fixture defaults remain unchanged.
+
+**Implementation boundaries.** A declaration macro may later add optional sugar,
+but a macro-generated `rust_test` plus suite is **not canonical** because the
+Rust test remains a second real Buck test target, introducing duplicate execution
+under broad target patterns and query noise. Automatic package scanning is **rejected as primary**; membership stays explicit.
+A global custom executor that transforms ordinary `rust_test` specs is **rejected as primary**: the pinned
+executor receives opaque execution handles rather than analysis providers,
+would expand into metadata/aggregation and result-mapping ownership, has
+unresolved runtime-closure semantics, and weakens the current remote/Execute2
+placement story. BXL as primary lifecycle and one nextest invocation per binary
+are also rejected. Reopening any of these architectures requires new evidence
+and operator approval.
+
+Stock `buck2 test //:suite` must work without the custom executor. The runner
+creates JUnit in Buck-owned private scratch, validates it, determines success or
+failure from nextest status, preserves diagnostics, and removes the report during
+cleanup; it promises no caller-visible XML. Caller-visible JUnit is separately
+opt-in: when the pinned executor provides its declared-directory capability, the
+same runner publishes the same unchanged validated XML through the existing
+secure export path.
+
+This change neither removes nor promotes the existing declared JUnit build
+action. Before either surface changes, an operator-approved decision record must
+name the owner/approver, selected outcome, passing evidence,
+migration/documentation consequences, and explicit removal or support boundary.
+The selected outcome must be one of: classify and remove the old action as
+temporary, retain it as a separately documented optional reporting API, or keep
+it supported. The evidence must cover the real toolchain, documented statuses,
+unchanged JUnit bytes and diagnostics, cancellation, and fresh-execution
 lifecycle. No implementation may remove, promote, or leave both surfaces
 indefinitely ambiguous before that record exists.
 
-**Dependencies/order.** Settle this interface together with the generic contract
-in follow-up 3 before rewriting the runner. Its production rule is required by
-all later acceptance tests.
+**Dependencies/order.** Pass the provider compatibility gate in follow-up 3
+before implementing `nextest_test`; then prove its consumer surface before
+rewriting or retiring the working record-based path. The selected rule is
+required by all later acceptance tests.
 
-**Acceptance evidence.** `buck2_nextest_real_declared_toolchain` must run through
-the production Buck test rule and real declared nextest toolchain. Additional
-lifecycle assertions must prove repeated `buck2 test` execution is not
-accidentally satisfied by a normal build cache, statuses remain documented,
-diagnostics remain Buck-owned, and exact JUnit bytes are unchanged. The
-explicit `buck2_nextest_cancellation_cleanup` probe remains fail-closed, but it
-is deferred as passing evidence until the Buck-to-runner-to-nextest boundary
-can prove cancellation and descendant quiescence.
+**Acceptance evidence.** The future `buck2_nextest_consumer_surface` family in
+follow-up 4 proves queryability, cross-package aggregation, and ordinary stock
+`buck2 test`; `buck2_nextest_real_declared_toolchain` proves the real declared
+nextest path. Additional lifecycle assertions prove repeated execution is not
+satisfied by a normal build cache, statuses remain documented, diagnostics
+remain Buck-owned, and exact JUnit bytes are unchanged. The explicit
+`buck2_nextest_cancellation_cleanup` probe remains fail-closed until the
+Buck-to-runner-to-nextest boundary proves cancellation and descendant quiescence.
 
-**Risks/decision triggers.** Buck2 test-provider and executor APIs require fresh
-research. The operator decision gate is mandatory after the named evidence
-passes and before changing the old action's status.
+**Risks/decision triggers.** Buck2 test-provider APIs require fresh research.
+The existing declared-JUnit operator decision gate remains mandatory and
+independent of the selected consumer API.
 
 <a id="generic-artifact-runtime-contract"></a>
 ## 3. Generalize the artifact/runtime contract
 
 **Purpose and evidence.** `adapter/src/manifest_v1.rs` and the Rust runner encode
-validated metadata and declared staging. A reusable rule needs
-arbitrary one-or-more test-binary records supplied by supported Buck providers
-or a minimal explicit wrapper/provider.
+validated metadata and declared staging, while the current production slice
+extracts only part of the bundled prelude's Rust runtime information. The
+selected consumer rule requires a narrow, versioned Rust-test provider or a
+supported additive prelude hook on ordinary `rust_test` targets.
 
-**Desired end state.** Each record carries package identity, the
-configuration-independent canonical Buck owner label in cell/package/target
-form, binary identity, a non-unique display name, exactly one executable
-artifact, runtime artifacts, platform, and generated/runtime outputs. Schema v2
-maps each package identity to one normalized package-scoped cwd; suite
-environment is supplied once by `nextest_buck_test`, not repeated per record.
-The uniqueness key is exactly `(package identity, canonical Buck target label, binary identity)`. Cargo package IDs and nextest binary IDs are generated
+**Provider compatibility gate.** Before any `nextest_test` implementation,
+`buck2_nextest_rust_provider_compatibility` must publish both (1) a compatibility
+matrix naming the supported Buck and bundled-prelude version and provider policy,
+and (2) an executable proof that an ordinary prelude `rust_test` exposes the
+required provider without creating a second real test target. If fresh
+investigation finds only a copied/forked prelude, a macro-generated duplicate
+test, or behavior loss, implementation stops and returns to the operator; it may
+not choose among those architectures by momentum.
+
+**Desired end state.** Provider-owned semantics are exactly one executable
+association, Buck-authoritative runtime closure, normalized effective test
+`env`/`run_env`, and artifact runtime triple/target-runner metadata needed by
+nextest. Rule-derived semantics are the configuration-independent canonical
+Buck owner label in cell/package/target form, package identity, deterministic
+binary and Cargo package identities, non-unique display defaults, and root-safe,
+collision-free synthetic package CWDs. Consumers repeat none of these fields.
+
+The uniqueness key remains exactly `(package identity, canonical Buck target
+label, binary identity)`. Cargo package IDs and nextest binary IDs are generated
 deterministically and reversibly from that semantic triple. Filters map through
-those generated package and binary identities plus test names discovered by
-nextest.
+those generated identities plus test names discovered by nextest. Display name,
+executable basename, staged filesystem path, and synthetic CWD are not identity.
 
-**Implementation boundaries.** Display name, executable basename, and filesystem
-path are excluded from identity. Reject missing fields, duplicate triples, duplicate executable association, multiple-executable record, and normalization/encoding collision before staging. In particular, reject one executable associated with multiple records and multiple executables in one record. Nextest `list` output is
-the sole source of test-case names for execution; do not consume checked-in or
-build-time test-name lists unless a demonstrated Buck listing API requirement
-triggers a separately approved design. Provider/wrapper semantic sources must be
-independent of exact future API field names. Only exact supported-provider field names and collision-free encoding mechanics are deferred; those decisions may not change the semantic identity rules. Never infer closure by scanning ambient
-state or guessing filesystem layout.
+**Environment compatibility.** Cargo-nextest 0.9.143 has one inherited process
+environment. Every selected target's effective map must be equal after provider
+normalization and path handling. Unequal maps fail analysis with conflicting
+labels and keys; they are never ignored, partitioned, guessed, silently
+represented by the first record, or replaced by suite values. Validated
+suite-level additions merge only after compatibility checking, apply uniformly,
+and may not set adapter/nextest-owned `CARGO_*`, `NEXTEST_*`, `LD_*`, or
+`DYLD_*` variables.
 
-**Dependencies/order.** Settle this contract and follow-up 2 before the Rust
-runner. Follow-ups 5 and 6 prove progressively stronger declared closures.
+**Platform compatibility.** Every selected executable must expose the same Rust
+artifact runtime triple and provider-normalized runner requirement. A runner
+requirement is either direct execution or a declared record containing executable
+identity, argv, declared environment/input closure, and supported artifact triple.
+Direct-versus-runner; different executable, argv, environment, or closure; or a
+runner that does not support the common triple is incompatible. Distinct triples
+or incompatible runners fail analysis before dispatch; schema validation also
+rejects heterogeneous serialized platform/runner records. Rust artifact runtime
+triple/runner metadata, cargo-nextest launcher `bundle_platform`, and Buck
+execution/RE platform are distinct and are not compared as artifact triples.
 
-**Acceptance evidence.** `buck2_nextest_generic_multi_binary`, using the
-production Buck test rule and real declared nextest toolchain, must cover same
-display names across targets and multiple binaries owned by one target without
-ambiguous dispatch or duplicated test-name metadata. Separate assertions must
-fail for each invalid record form and for non-reversible or colliding generated
-identities.
+**Implementation boundaries.** Reject missing fields, duplicate triples,
+duplicate executable association, multiple-executable record, and
+normalization/encoding collision before staging. In particular, reject one
+executable associated with multiple records and multiple executables in one
+record. Nextest `list` output is the sole source of test-case names for execution;
+do not consume checked-in or build-time test-name lists absent a separately
+approved Buck listing design. Only exact supported-provider field names and
+collision-free encoding mechanics are deferred; they may not change semantic
+identity. Never scan `buck-out`, infer closure from output layout, copy/fork the
+Rust prelude to avoid provider research, or use ambient repository/home Cargo
+configuration. Upward and home Cargo discovery must be neutralized; environment
+and `[target.<triple>.runner]` behavior comes only from declared
+provider/toolchain/suite inputs.
 
-**Risks/decision triggers.** Fresh Buck Rust provider/API research determines
-field names or whether a minimal wrapper is necessary. Encoding syntax needs a
-collision analysis, not ad hoc normalization.
+**Dependencies/order.** Pass the compatibility gate before implementing the
+consumer fixture or runner changes. The real declared path and realistic closure
+must then prove the selected provider semantics before production-readiness
+claims.
+
+**Acceptance evidence.** In addition to the compatibility gate,
+`buck2_nextest_generic_multi_binary` covers same display names across targets and
+multiple binaries owned by one target without ambiguous dispatch or duplicated
+test-name metadata. Separate checks reject every invalid record form, colliding
+identity, unequal environment, heterogeneous artifact triple, and incompatible
+runner requirement.
+
+**Risks/decision triggers.** Fresh supported-prelude research determines exact
+provider fields and whether a stable additive hook exists. Absence of such a hook
+is a consequential blocker requiring operator review, not permission to narrow
+behavior or fork the prelude. Encoding syntax needs collision analysis.
+
+<a id="consumer-surface"></a>
+## 4. Implement and prove the selected consumer surface
+
+**Purpose and evidence.** Consumer ergonomics is an early product contract, not
+late cleanup. `buck2_nextest_consumer_surface` is a named future executable check
+family; this roadmap smoke test verifies only that the requirement remains
+specified and does not supply its runtime coverage.
+
+**Fixture topology.** At least two package BUCK files declare ordinary prelude
+`rust_test` targets, and exactly one public cross-package `nextest_test` suite
+selects them. A repository-level harness runs Buck query/analysis and
+`buck2 test //:suite`, and observes runner command cardinality without source
+grep.
+
+**Positive acceptance.** The check fails if consumers must author adapter record
+targets or repeat package identity, owner label, binary identity, display name,
+synthetic CWD, runtime destinations, effective environment, or platform metadata.
+It proves one queryable suite and one nextest invocation cover all selected
+binaries; broad target queries reveal no macro-generated duplicate Rust test
+target; deterministic identities remain collision-safe; and provider-derived
+runtime/environment reaches the tests. It covers eventual defaults
+`filter = "all()"` and `no_tests = "fail"` plus explicit overrides, without
+changing current fixture defaults.
+
+**Negative and platform acceptance.** Distinct future analysis checks reject
+unequal target effective environments, heterogeneous artifact runtime triples,
+and incompatible runner requirements, including different runner executable or
+argv and direct-versus-runner. Contract-level validation rejects heterogeneous
+serialized platform/runner records. Positive equal-platform and equal-runner
+cases pass independently of cargo-nextest bundle identity and Buck RE platform
+selection.
+
+`buck2_nextest_ambient_cargo_config_denied` uses an isolated harness with
+conflicting ancestor and synthetic-HOME Cargo configuration, including poisoned
+`[env]` and `[target.<triple>.runner]` entries. It proves only declared
+provider/toolchain/suite metadata determines execution and never reads or
+modifies the operator's real home.
+
+**Report modes.** A stock-mode check runs `buck2 test //:suite` without an
+executor report capability: the runner creates JUnit in Buck-owned private
+scratch, succeeds or fails from nextest status, validates and removes the report,
+and promises no caller-visible XML. A separate opt-in check supplies the pinned
+executor's declared-directory capability and proves the same runner publishes
+the same unchanged validated XML through the secure export path.
+
+**Dependencies/order.** Requires `buck2_nextest_rust_provider_compatibility`.
+Realistic runtime closure and core nextest feature checks remain prerequisites
+for production readiness; ergonomic syntax alone is not parity evidence.
+
+**Risks/decision triggers.** The fixture must observe Buck behavior rather than
+pin generated source or internal target names. Any need for duplicate tests,
+prelude forking, automatic discovery, or metadata repetition returns to the
+operator.
 
 <a id="rust-runner"></a>
-## 4. Implement a Rust runner
+## 5. Implement a Rust runner
 
 **Purpose and evidence.** `adapter/src/bin/nextest_buck_artifact.rs` owns the
 strict declared-input dispatch and supervision boundary. Rewriting
@@ -217,9 +355,9 @@ JUnit, or synthesize an event/result protocol. It must not retain compatibility-
 only shell branches without a current use case and must not invoke Cargo or
 rustc.
 
-**Dependencies/order.** Begin only after follow-ups 2 and 3 settle the Buck and
-manifest interfaces. Preserve existing status/JUnit behavior while replacing the
-implementation.
+**Dependencies/order.** Begin only after the selected Buck surface, provider
+contract, and consumer acceptance shape are settled. Preserve existing
+status/JUnit behavior while replacing the implementation.
 
 **Acceptance evidence.** Existing status, exact-JUnit, malformed-input,
 relocation, source-denial, and action-policy checks remain behavioral gates.
@@ -233,7 +371,7 @@ implementation research. Evidence, not backwards compatibility, determines
 which shell seams survive.
 
 <a id="real-declared-nextest"></a>
-## 5. Prove real nextest through the declared production path
+## 6. Prove real nextest through the declared production path
 
 **Purpose and evidence.** The declared build/toolchain path uses the recorder in
 `tools/nextest_cargo_nextest_v1.py:28-56`; the Rust runner now drives that same
@@ -247,7 +385,7 @@ artifact, real `list` and `run`, and byte-for-byte unchanged JUnit.
 **Implementation boundaries.** Prove there is no ambient executable,
 interpreter, library, or support-file fallback. This milestone closes the current
 fixture/toolchain split but does not claim the provider-derived realistic Rust
-closure in follow-up 6.
+closure in follow-up 7.
 
 **Dependencies/order.** Requires the production test surface and generic
 contract. It precedes realistic closure and all renewed RE work.
@@ -261,7 +399,7 @@ Buck ownership, or JUnit bytes change.
 Buck executable-provider research, but cannot relax the ambient-input boundary.
 
 <a id="realistic-rust-runtime-closure"></a>
-## 6. Support a realistic Buck Rust runtime closure
+## 7. Support a realistic Buck Rust runtime closure
 
 **Purpose and evidence.** This increment closes the first provider-runtime
 slice: the production `nextest_buck_test` path consumes the Rust executable's
@@ -272,37 +410,43 @@ scenario reaches the named test and publishes its stable missing-resource
 failure. Shared libraries, build-script outputs, provider-derived environment
 and platform/runner metadata, and broader transitive semantics remain unproved.
 
-**Desired end state.** Extend the established provider authority to shared
-libraries, generated/build-script outputs, runtime data, environment,
-platform/runner information, and other transitive runtime artifacts from
-supported Buck Rust providers or a minimal explicit wrapper, without adding
-consumer-authored layout or ambient fallback.
+**Desired end state.** Extend the selected narrow, versioned Rust-test provider
+authority to shared libraries, generated/build-script outputs, runtime data,
+effective environment, artifact runtime triple/runner requirements, and other
+transitive runtime artifacts without consumer-authored layout or ambient
+fallback.
 
-**Implementation boundaries.** Never guess output layout, scan `buck-out`, or
-use ambient state. Buck remains authoritative for the complete closure and
-nextest receives only declared executable/runtime records.
+**Implementation boundaries.** Never guess output layout, scan `buck-out`, use
+ambient state, or repeat provider-derived fields in the suite declaration. Buck
+remains authoritative for the complete closure. Neutralize ancestor and home
+Cargo configuration, including `[env]` and `[target.<triple>.runner]`; target
+runner support can enter only through the selected provider contract. Do not
+copy or fork the prelude merely to avoid provider research.
 
-**Dependencies/order.** Follow the fixture/toolchain proof in follow-up 5 and use
-the generic record contract from follow-up 3.
+**Dependencies/order.** Requires the provider compatibility gate, selected
+consumer surface, and real declared toolchain proof. Provider/runtime evidence is
+a prerequisite for the consumer interface to become production-ready.
 
 **Acceptance evidence.** The completed `buck2_nextest_runtime_closure`, using
 the production Buck test rule and real declared nextest toolchain, proves a
 Buck-generated Rust `resources` dependency and fails when that specific provider
 edge is removed. The registered provider/action contract additionally proves the
 positive `DistInfo` closure is materialized without a packaging or staging action.
-This closes only the generated-resource/provider-file portion; a future
-extension must independently prove shared-library or build-script-specific
-behavior and any provider-derived environment/platform semantics before this
-broad follow-up is complete.
+This closes only the generated-resource/provider-file portion; future extension
+must independently prove shared-library or build-script behavior and the
+provider-derived environment/platform semantics specified by
+`buck2_nextest_consumer_surface` and
+`buck2_nextest_ambient_cargo_config_denied` before this follow-up is complete.
 
-**Risks/decision triggers.** Fresh provider investigation decides whether current
-Buck Rust providers expose enough information or a minimal wrapper is needed.
+**Risks/decision triggers.** If the supported bundled prelude cannot expose the
+required closure through its proven provider/additive hook, stop and return to
+the operator rather than choosing a fork, duplicate test, or behavior loss.
 
 <a id="core-nextest-value"></a>
-## 7. Prove the core nextest value proposition
+## 8. Prove the core nextest value proposition
 
-**Purpose and evidence.** The current Phase 7 list has no production-path proof
-for the features that justify nextest: process isolation, retry, timeout,
+**Purpose and evidence.** The roadmap feature list has no production-path proof
+for all behaviors that justify nextest: process isolation, retry, timeout,
 slowness, capture, ignored tests, and group concurrency.
 
 **Desired end state.** End-to-end tests demonstrate those behaviors and a
@@ -314,8 +458,9 @@ retry, timeout/slowness, grouping/scheduling intent, capture, and JUnit. Buck
 owns global resources and the enclosing action. Combined scenarios are allowed,
 but every behavior needs an independently failing assertion.
 
-**Dependencies/order.** Requires follow-ups 2, 3, 5, and 6. It precedes claims
-of production usefulness and resumed remote validation.
+**Dependencies/order.** Requires the selected consumer surface, provider gate,
+real declared path, and realistic runtime closure. It precedes claims of
+production usefulness and resumed remote validation.
 
 **Acceptance evidence.** The feature-to-test matrix below is authoritative for
 future product coverage.
@@ -327,6 +472,14 @@ A shared check name never permits a shared, non-specific assertion.
 
 | Feature | Named future check | Regression-sensitive assertion | Production-path constraint |
 |---|---|---|---|
+| Provider/prelude compatibility | `buck2_nextest_rust_provider_compatibility` | Fails unless the supported Buck/prelude matrix and ordinary-`rust_test` provider proof both pass without a duplicate test target. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Selected cross-package consumer surface | `buck2_nextest_consumer_surface` | Fails unless one queryable suite produces one nextest invocation without consumer-authored records or metadata repetition. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Ambient Cargo configuration denial | `buck2_nextest_ambient_cargo_config_denied` | Fails unless poisoned ancestor and synthetic-HOME environment/runner settings are ignored in favor of declared metadata. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Effective-environment compatibility | `buck2_nextest_environment_compatibility` | Fails unless equal normalized maps pass and unequal maps fail analysis with conflicting labels and keys. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Artifact-platform compatibility | `buck2_nextest_artifact_platform_compatibility` | Fails unless equal triples pass and heterogeneous triples fail analysis independently of bundle and RE platforms. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Target-runner compatibility | `buck2_nextest_target_runner_compatibility` | Fails unless equal runners pass and different executable/argv or direct-versus-runner requirements fail analysis. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Stock report mode | `buck2_nextest_stock_report_mode` | Fails unless private JUnit is validated and removed with no caller-visible XML while status and diagnostics remain correct. | Uses the production Buck test rule and real declared nextest toolchain. |
+| Opt-in report mode | `buck2_nextest_opt_in_report_mode` | Fails unless the pinned capability publishes the same unchanged validated XML through the secure path. | Uses the production Buck test rule and real declared nextest toolchain. |
 | Real declared list/run and unchanged JUnit | `buck2_nextest_real_declared_toolchain` | Fails if either invocation is stubbed, an ambient fallback is used, or exported JUnit differs byte-for-byte. | Uses the production Buck test rule and real declared nextest toolchain. |
 | Generic multiple binaries and identities | `buck2_nextest_generic_multi_binary` | Fails on ambiguous dispatch, duplicate test-name metadata, same-display-name aliasing, or multiple binaries from one owner collapsing identity. | Uses the production Buck test rule and real declared nextest toolchain. |
 | Realistic runtime dependency | `buck2_nextest_runtime_closure` | Fails when the independently declared shared-library or generated/build-script edge is omitted. | Uses the production Buck test rule and real declared nextest toolchain. |
@@ -345,38 +498,46 @@ independently asserted feature, investigate upstream nextest before narrowing
 the integration. Do not preemptively embed or fork nextest.
 
 <a id="simplify-compatibility"></a>
-## 8. Simplify the compatibility layer and consumer setup
+## 9. Retire obsolete compatibility surfaces
 
-**Purpose and evidence.** Current code mutates captured baseline JSON and asks
-consumers to provide Cargo/Python, arbitrary bundle resources, and digests. Some
-fault seams and source-grep tests pin implementation rather than behavior.
+**Purpose and evidence.** Current code mutates captured baseline JSON, exposes
+low-level record declarations, and asks consumers to provide Cargo/Python,
+arbitrary bundle resources, and digests. Some fault seams and source-grep tests
+pin implementation rather than behavior.
 
-**Desired end state.** Generate supported metadata explicitly; retain baselines
-only as upstream compatibility/regeneration evidence. Remove inputs and
-consumer-authored identity data that Buck artifact identity makes unnecessary,
-and consolidate product seams only where behavioral tests replace them.
+**Desired end state.** After the provider-backed consumer rule has behavioral
+replacements, make `nextest_buck_test_binary` internal or remove it rather than
+keeping the record rule as a co-equal public API. Generate supported metadata
+explicitly; retain baselines only as upstream compatibility/regeneration
+evidence; remove unnecessary consumer inputs and implementation-only seams.
+There are no consumers, so backward-compatibility work is not required, but
+removal still waits for replacement evidence.
 
 **Implementation boundaries.** Reassess Cargo/Python inputs, mandatory bundle
-resources, digests, baseline mutation, and fault injection separately. Do not
-remove current behavior merely because there are no users. In particular,
+resources, digests, baseline mutation, fault injection, toolchain baseline, and
+fault seams separately from the selected public declaration shape. Do not remove
+the working production slice before the new consumer, provider, manifest,
+relocation, source-denial, status, JUnit, and real-toolchain checks replace it.
 The former executor sentinel is intentionally removed from the Rust runtime;
 process-group and status behavior are covered by native lifecycle tests instead.
 
-**Dependencies/order.** Simplify after the production surface and generic
-contract expose which compatibility pieces remain necessary. Retire
-implementation-pinning checks only after stable behavioral replacements exist.
+**Dependencies/order.** Retire compatibility only after
+`buck2_nextest_consumer_surface`, provider/runtime evidence, and stable behavioral
+replacements pass. Remove implementation-pinning checks only when the replacement
+would independently fail on the protected regression.
 
-**Acceptance evidence.** Consumer fixtures must require fewer authored inputs
-while all manifest validation, relocation, source-denial, status, JUnit, and
-real-toolchain checks continue to pass. A dedicated executor-sentinel regression
-must precede changing `BUCK2_NEXTEST_TEST_EXECUTOR`.
+**Acceptance evidence.** The public fixture requires only ordinary `rust_test`
+targets and one `nextest_test`; the low-level record target is absent from the
+public setup while all behavioral gates continue to pass. A dedicated
+executor-sentinel regression must precede changing
+`BUCK2_NEXTEST_TEST_EXECUTOR`.
 
 **Risks/decision triggers.** Upstream metadata requirements determine which
-baselines remain. Any removal that changes adapter or provider contracts needs a
-separate operator-reviewed implementation decision.
+baselines remain. Evidence may retain internal compatibility machinery, but it
+must not silently preserve a co-equal consumer API.
 
 <a id="reassess-and-resume-remote"></a>
-## 9. Reassess integration and resume remote validation
+## 10. Reassess integration and resume remote validation
 
 **Purpose and evidence.** The current CLI/remap path has not yet been tested
 against a generic realistic closure, while Phase 8's live request reached the
@@ -452,6 +613,6 @@ resource, recipe, CI entry, or stale smoke/prose reference.
 
 | Group | Work |
 |---|---|
-| **next** | Clean disposable Buck isolations after each test; freeze additional RE expansion; define the primary Buck test surface; generalize the artifact/runtime contract; then implement the Rust runner; prove the real declared nextest fixture/toolchain path. |
-| **after the local production path** | Support realistic Rust runtime closure; prove core nextest features; simplify compatibility and consumer setup; reassess the integration; resume live RE platform, materialization, cancellation, failed-result, and cache validation. |
-| **deferred until evidence requires it** | Direct nextest embedding or forking; per-test Buck delegation; persistent workers; persistent nextest records; richer event/result protocols. |
+| **next** | Clean disposable Buck isolations; preserve the remote-expansion freeze; pass `buck2_nextest_rust_provider_compatibility`; establish provider-backed `nextest_test`; prove `buck2_nextest_consumer_surface`; then prove the real declared nextest path and realistic provider-derived runtime closure. |
+| **after the local production path** | Prove core nextest features; retire obsolete low-level compatibility surfaces after behavioral replacements; reassess the integration; resume live RE platform, materialization, cancellation, failed-result, and cache validation. |
+| **deferred until evidence requires it** | Direct nextest embedding or forking; global transforming executor; macro-only canonical API; automatic package discovery; per-test Buck delegation; persistent workers; persistent nextest records; richer event/result protocols. |

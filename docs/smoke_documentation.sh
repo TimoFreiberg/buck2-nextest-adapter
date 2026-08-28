@@ -105,7 +105,7 @@ grep -F 'action graph wiring' "$follow_up" >/dev/null
 grep -F 'DefaultInfo' "$follow_up" >/dev/null
 grep -F 'relocated/sanitized declared-input scenario is required repository-level CI coverage' "$follow_up" >/dev/null
 grep -F 'generated Rust `resources` edge' "$roadmap_follow_ups" >/dev/null
-grep -F 'shared-library or build-script-specific' "$roadmap_follow_ups" >/dev/null
+grep -F 'shared-library or build-script behavior' "$roadmap_follow_ups" >/dev/null
 
 ! grep -F 'adapter.sh cargo-fixture' "$readme" "$baseline" "$roadmap"
 ! grep -F '//:nextest_spike' "$readme" "$baseline" "$roadmap"
@@ -117,30 +117,78 @@ grep -F 'shared-library or build-script-specific' "$roadmap_follow_ups" >/dev/nu
 ! grep -F 'endpoint defaults' "$readme" "$roadmap"
 ! grep -F 'Start Phase 5 with a bounded reporting' "$roadmap"
 
-# The new sequence is executable documentation: every roadmap anchor resolves,
-# required evidence and boundaries remain explicit, and no follow-up is claimed
-# complete before its future acceptance check exists.
-for anchor in per-test-isolation-cleanup realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
+# The selected future interface is executable documentation. The current
+# record-based implementation remains explicit, while every future anchor,
+# boundary, and ordered acceptance gate is durable.
+for anchor in per-test-isolation-cleanup freeze-remote-readiness primary-buck-test-surface consumer-surface real-declared-nextest realistic-rust-runtime-closure core-nextest-value simplify-compatibility reassess-and-resume-remote; do
     grep -F "roadmap-follow-ups.md#$anchor" "$roadmap" >/dev/null
     grep -F "<a id=\"$anchor\"></a>" "$roadmap_follow_ups" >/dev/null
 done
-[ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 10 ]
+[ "$(grep -c '^<a id=' "$roadmap_follow_ups")" -eq 11 ]
 ! grep -Ei '^([0-9]+\.|###).*follow-up.*(complete|implemented)' "$roadmap_follow_ups" >/dev/null
 
 for evidence in 'nextest.bzl:206-272' 'adapter/src/bin/nextest_buck_artifact.rs' 'adapter/src/manifest_v1.rs' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md'; do
     grep -F "$evidence" "$roadmap_follow_ups" >/dev/null
 done
-for heading in '## Architectural invariants' '## Immediate maintenance: clean disposable Buck isolations after each test' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement a Rust runner' '## 5. Prove real nextest through the declared production path' '## 6. Support a realistic Buck Rust runtime closure' '## 7. Prove the core nextest value proposition' '## 8. Simplify the compatibility layer and consumer setup' '## 9. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
+for heading in '## Architectural invariants' '## Immediate maintenance: clean disposable Buck isolations after each test' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement and prove the selected consumer surface' '## 5. Implement a Rust runner' '## 6. Prove real nextest through the declared production path' '## 7. Support a realistic Buck Rust runtime closure' '## 8. Prove the core nextest value proposition' '## 9. Retire obsolete compatibility surfaces' '## 10. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
     grep -F "$heading" "$roadmap_follow_ups" >/dev/null
 done
-for invariant in 'Buck remains authoritative for build artifacts' 'Nextest remains authoritative for test discovery' 'must not invoke Cargo or rustc' 'No source-tree or arbitrary unmanaged `buck-out` writes' 'Fresh test execution must use Buck' 'Preserve exact nextest JUnit bytes' 'Do not' 'Process-tree cleanup, cancellation, and no-orphan behavior' 'Consumer setup should become simpler'; do
+for invariant in 'Buck remains authoritative for build artifacts' 'Nextest remains authoritative for test discovery' 'must not invoke Cargo or rustc' 'No source-tree or arbitrary unmanaged `buck-out` writes' 'Fresh test execution must use Buck' 'Preserve exact nextest JUnit bytes' 'Process-tree cleanup, cancellation, and no-orphan behavior' 'Consumer setup should become simpler'; do
     grep -F "$invariant" "$roadmap_follow_ups" >/dev/null
 done
 for group in '**next**' '**after the local production path**' '**deferred until evidence requires it**'; do grep -F "$group" "$roadmap_follow_ups" >/dev/null; done
+python3 - "$roadmap" "$roadmap_follow_ups" <<'PY'
+from pathlib import Path
+import sys
 
-# Generic semantic identity and pre-staging rejection are architectural, while
-# only provider field names and collision-free encoding mechanics are deferred.
-for contract in '(package identity, canonical Buck target label, binary identity)' 'configuration-independent canonical Buck owner label in cell/package/target' 'supported Buck providers' 'minimal explicit wrapper/provider' 'deterministically and reversibly' 'Display name, executable basename, and filesystem' 'exactly one executable' 'duplicate triples' 'duplicate executable association' 'multiple-executable record' 'normalization/encoding collision before staging' 'one executable associated with multiple records' 'multiple executables in one record' 'Only exact supported-provider field names and collision-free encoding mechanics are deferred' 'the sole source of test-case names for execution'; do
+roadmap = Path(sys.argv[1]).read_text()
+follow_ups = Path(sys.argv[2]).read_text()
+roadmap_markers = [
+    "#freeze-remote-readiness",
+    "#primary-buck-test-surface",
+    "#consumer-surface",
+    "#real-declared-nextest",
+    "#realistic-rust-runtime-closure",
+    "#core-nextest-value",
+    "#simplify-compatibility",
+    "#reassess-and-resume-remote",
+]
+follow_up_markers = [
+    '<a id="freeze-remote-readiness"></a>',
+    '<a id="primary-buck-test-surface"></a>',
+    '<a id="generic-artifact-runtime-contract"></a>',
+    '<a id="consumer-surface"></a>',
+    '<a id="real-declared-nextest"></a>',
+    '<a id="realistic-rust-runtime-closure"></a>',
+    '<a id="core-nextest-value"></a>',
+    '<a id="simplify-compatibility"></a>',
+    '<a id="reassess-and-resume-remote"></a>',
+]
+for text, markers in ((roadmap, roadmap_markers), (follow_ups, follow_up_markers)):
+    offsets = [text.index(marker) for marker in markers]
+    assert offsets == sorted(offsets), f"roadmap markers out of order: {markers}"
+PY
+
+# Selected API, current/future boundary, and rejected primary architectures.
+# The concise and detailed roadmaps must each retain the central contract.
+for contract in 'nextest_test(' 'tests = ["//parser:tests", "//storage:tests"]' 'existing ordinary `rust_test`' 'cross-package' 'one nextest invocation' 'filter = "all()"' 'no_tests = "fail"' 'current fixture defaults remain unchanged' 'Caller-visible JUnit' 'opt-in'; do
+    grep -F "$contract" "$roadmap" >/dev/null
+    grep -F "$contract" "$roadmap_follow_ups" >/dev/null
+done
+for contract in '`buck2 test //:suite`' 'narrow, versioned Rust-test provider' 'Buck-authoritative runtime closure' 'effective environment' 'artifact runtime triple/runner metadata' 'collision-free synthetic'; do
+    grep -F "$contract" "$roadmap" "$roadmap_follow_ups" >/dev/null
+done
+grep -F 'implemented schema-v2 `nextest_buck_test_binary`/`nextest_buck_test`' "$roadmap" >/dev/null
+! grep -Ei 'nextest_test.{0,40}(is implemented|is supported|current)' "$roadmap" "$roadmap_follow_ups" >/dev/null
+for rejection in 'macro-generated' 'Automatic package' 'global custom executor'; do
+    grep -Fi "$rejection" "$roadmap_follow_ups" | grep -Ei 'not canonical|rejected as primary' >/dev/null
+done
+! grep -Ei 'selected (primary )?interface.{0,80}(macro|global executor|automatic)' "$roadmap" "$roadmap_follow_ups" >/dev/null
+for distinct in 'Rust artifact runtime' 'cargo-nextest launcher `bundle_platform`' 'execution/RE platform are distinct'; do grep -F "$distinct" "$roadmap_follow_ups" >/dev/null; done
+
+# Provider ownership, semantic identity, compatibility, and ambient denial are
+# architectural; only exact field names and encoding mechanics remain deferred.
+for contract in '(package identity, canonical Buck target' 'configuration-independent canonical' 'deterministically and reversibly' 'Display name,' 'staged filesystem path' 'exactly one executable' 'duplicate triples' 'duplicate executable association' 'multiple-executable record' 'normalization/encoding collision before staging' 'executable associated with multiple records' 'multiple executables in one' 'Only exact supported-provider field names' 'sole source of test-case names for execution' 'one inherited process' 'fail analysis with conflicting' 'Direct-versus-runner' 'heterogeneous serialized platform/runner records' 'Upward and home Cargo discovery must be neutralized'; do
     grep -F "$contract" "$roadmap_follow_ups" >/dev/null
 done
 
@@ -169,6 +217,14 @@ just = Path(sys.argv[3]).read_text()
 root_path = Path(sys.argv[4])
 
 required_checks = {
+    "buck2_nextest_rust_provider_compatibility",
+    "buck2_nextest_consumer_surface",
+    "buck2_nextest_ambient_cargo_config_denied",
+    "buck2_nextest_environment_compatibility",
+    "buck2_nextest_artifact_platform_compatibility",
+    "buck2_nextest_target_runner_compatibility",
+    "buck2_nextest_stock_report_mode",
+    "buck2_nextest_opt_in_report_mode",
     "buck2_nextest_real_declared_toolchain",
     "buck2_nextest_generic_multi_binary",
     "buck2_nextest_runtime_closure",
@@ -186,10 +242,13 @@ assert rows, "feature matrix has no rows"
 for row in rows:
     cells = [cell.strip() for cell in row.strip("|").split("|")]
     assert len(cells) == 4, f"malformed feature row: {row}"
-    assert cells[2] and ("Fails " in cells[2] or "Fails unless" in cells[2] or "Fail-closed probe" in cells[2]), f"non-regression-sensitive assertion: {row}"
-    assert cells[3] == "Uses the production Buck test rule and real declared nextest toolchain.", f"missing production constraint: {row}"
+    assert cells[2], f"missing regression-sensitive assertion: {row}"
+    assert "production Buck test rule" in cells[3] and "real declared nextest toolchain" in cells[3], f"missing production-path constraint: {row}"
 for check in required_checks:
-    assert any(f"`{check}`" in row for row in rows), f"missing future check {check}"
+    matching = [row for row in rows if f"`{check}`" in row]
+    assert matching, f"missing future check {check}"
+    cells = [cell.strip() for cell in matching[0].strip("|").split("|")]
+    assert cells[2] and cells[3], f"future check lacks assertion or path constraint: {check}"
 
 matrix = text.split("## Quick-cleanup assertion matrix", 1)[1].split("## Prioritization", 1)[0]
 rows = [line for line in matrix.splitlines() if line.startswith("| `")]
