@@ -2,6 +2,7 @@
 set -euo pipefail
 
 project_root=${BUCK_CLEAN_PROJECT_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)}
+project_root=$(CDPATH= cd -- "$project_root" && pwd -P)
 buck_out="$project_root/buck-out"
 buck=${BUCK2:-buck2}
 target_gib=${BUCK_CLEAN_TARGET_GIB:-8}
@@ -19,14 +20,15 @@ if (( parallelism < 1 || parallelism > 16 )); then
     exit 2
 fi
 
-if [[ ! -d "$buck_out" ]]; then
-    printf '%s\n' 'buck-out does not exist'
-    exit 0
-fi
 if [[ -L "$buck_out" ]]; then
     printf '%s\n' 'refusing to clean a symlinked buck-out' >&2
     exit 2
 fi
+if [[ ! -d "$buck_out" ]]; then
+    printf '%s\n' 'buck-out does not exist'
+    exit 0
+fi
+CDPATH= cd -- "$project_root"
 
 target_kib=$((target_gib * 1024 * 1024))
 out_kib=$(du -sk "$buck_out" | awk '{print $1}')
@@ -36,26 +38,60 @@ if (( out_kib <= target_kib )); then
     exit 0
 fi
 
+# Protect every matching daemon, including an idle one: it may service work
+# that is about to start, and Buck has no cross-isolation reservation API.
+# The repeated checks narrow, but cannot eliminate, a daemon-start race between
+# this check and Buck's clean command; Buck owns the final isolation semantics.
 active_isolation() {
     local isolation=$1
-    local process_listing
-    process_listing=$(command ps ax -o command=) || {
+    local process_listing pid cwd
+    process_listing=$(command ps axww -o pid=,command=) || {
         printf '%s\n' 'unable to inspect Buck daemons; refusing destructive cleanup' >&2
-        exit 2
+        return 2
     }
-    awk -v wanted="$isolation" '
+    while read -r pid _; do
+        [[ -n "$pid" ]] || continue
+        if [[ -r "/proc/$pid/cwd" ]]; then
+            cwd=$(readlink "/proc/$pid/cwd") || return 2
+        elif command -v lsof >/dev/null 2>&1; then
+            cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | awk 'substr($0, 1, 1) == "n" { print substr($0, 2); exit }')
+            [[ -n "$cwd" ]] || return 2
+        else
+            printf '%s\n' 'cannot identify Buck daemon project roots; refusing destructive cleanup' >&2
+            return 2
+        fi
+        if [[ "$cwd" == "$project_root" ]]; then return 0; fi
+    done < <(awk -v wanted="$isolation" '
         /buck2d\[/ {
-            for (i = 1; i < NF; i++) {
-                if ($i == "--isolation-dir" && $(i + 1) == wanted) found = 1
+            for (i = 2; i < NF; i++) {
+                if ($i == "--isolation-dir" && $(i + 1) == wanted) print $1
             }
         }
-        END { exit(found ? 0 : 1) }
-    ' <<< "$process_listing"
+    ' <<< "$process_listing")
+    return 1
+}
+
+skip_if_active() {
+    local isolation=$1 status
+    if active_isolation "$isolation"; then
+        printf 'skip active isolation=%s\n' "$isolation" >&2
+        return 0
+    else
+        status=$?
+    fi
+    [[ "$status" -eq 1 ]] || exit "$status"
+    return 1
 }
 
 # ls is used only for Buck-generated isolation names, which are validated below.
 # Unlike stat -f, this ordering form works on both BSD and GNU userlands.
-ordered_paths=$(ls -1dtr "$buck_out"/*/ 2>/dev/null || true)
+shopt -s nullglob
+candidate_paths=("$buck_out"/*/)
+shopt -u nullglob
+ordered_paths=''
+if ((${#candidate_paths[@]} > 0)); then
+    ordered_paths=$(ls -1dtr "${candidate_paths[@]}" 2>/dev/null)
+fi
 needed_kib=$((out_kib - target_kib))
 selected=()
 selected_kib=0
@@ -72,12 +108,11 @@ while IFS= read -r path; do
     esac
     tag="$path/CACHEDIR.TAG"
     [[ -f "$tag" && ! -L "$tag" ]] || continue
-    grep -Fq 'Signature: 8a477f597d28d172789f06886806bc55' "$tag" || continue
-    [[ -d "$path/cache" && -d "$path/art" && -d "$path/log" ]] || continue
-    if active_isolation "$isolation"; then
-        printf 'skip active isolation=%s\n' "$isolation" >&2
-        continue
-    fi
+    grep -Fxq 'Signature: 8a477f597d28d172789f06886806bc55' "$tag" || continue
+    [[ -d "$path/cache" && ! -L "$path/cache" ]] || continue
+    [[ -d "$path/art" && ! -L "$path/art" ]] || continue
+    [[ -d "$path/log" && ! -L "$path/log" ]] || continue
+    if skip_if_active "$isolation"; then continue; fi
     size_kib=$(du -sk "$path" | awk '{print $1}')
     selected+=("$isolation")
     selected_kib=$((selected_kib + size_kib))
@@ -102,10 +137,7 @@ run_batch() {
 }
 
 for isolation in "${selected[@]}"; do
-    if active_isolation "$isolation"; then
-        printf 'skip active isolation=%s\n' "$isolation" >&2
-        continue
-    fi
+    if skip_if_active "$isolation"; then continue; fi
     printf 'clean isolation=%s\n' "$isolation"
     "$buck" --isolation-dir "$isolation" clean &
     pids+=("$!")
