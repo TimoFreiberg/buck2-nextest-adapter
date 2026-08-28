@@ -87,6 +87,16 @@ BUCK_CLEAN_DAEMON_ISOLATION=z-old-sibling BUCK_CLEAN_DAEMON_CWD="$root/buck-out/
 grep -F -- '--isolation-dir z-old-sibling clean' "$action_log"
 ! test -d "$root/buck-out/z-old-sibling"
 
+# A matching daemon belonging to another project must not protect this cache.
+make_cache z-old-foreign
+touch -t 202001010000 "$root/buck-out/z-old-foreign" "$root/buck-out/z-old-foreign/CACHEDIR.TAG"
+: >"$root/old-present"
+foreign_root=$(mktemp -d "${TMPDIR:-/tmp}/buck-clean-foreign.XXXXXX")
+BUCK_CLEAN_DAEMON_ISOLATION=z-old-foreign BUCK_CLEAN_DAEMON_CWD="$foreign_root" PATH="$root:$shim:$PATH" run >/dev/null
+rm -rf "$foreign_root"
+grep -F -- '--isolation-dir z-old-foreign clean' "$action_log"
+! test -d "$root/buck-out/z-old-foreign"
+
 for target in 4 11; do
     if BUCK_CLEAN_TARGET_GIB="$target" BUCK_CLEAN_PROJECT_ROOT="$root" BUCK2="$fake_buck" "$script" >/dev/null 2>&1; then
         printf 'invalid target unexpectedly accepted: %s\n' "$target" >&2
