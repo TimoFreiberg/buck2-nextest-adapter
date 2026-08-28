@@ -6,9 +6,13 @@ script="$repo/buck2_nextest_clean_stale.sh"
 root=$(mktemp -d "${TMPDIR:-/tmp}/buck-clean-contract.XXXXXX")
 trap 'rm -rf "$root"' EXIT
 mkdir -p "$root/buck-out"/{v2,z-old,a-new,z-invalid,z-symlink}
-for isolation in v2 z-old a-new; do
-    printf '%s\n' 'Signature: 8a477f597d28d172789f06886806bc55' >"$root/buck-out/$isolation/CACHEDIR.TAG"
+make_cache() {
+    local isolation=$1
     mkdir -p "$root/buck-out/$isolation"/{cache,art,log}
+    printf '%s\n' 'Signature: 8a477f597d28d172789f06886806bc55' >"$root/buck-out/$isolation/CACHEDIR.TAG"
+}
+for isolation in v2 z-old a-new; do
+    make_cache "$isolation"
 done
 printf '%s\n' 'not Buck-owned' >"$root/buck-out/z-invalid/CACHEDIR.TAG"
 mkdir -p "$root/buck-out/z-invalid"/{cache,art,log}
@@ -40,7 +44,7 @@ chmod +x "$shim/du"
 # depending on the host process table or the fixture shell's working directory.
 daemon_pid=999999999
 ps_shim="$root/ps"
-printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$BUCK_CLEAN_DAEMON_PID buck2d[fixture] --isolation-dir z-old daemon"' >"$ps_shim"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$BUCK_CLEAN_DAEMON_PID buck2d[fixture] --isolation-dir ${BUCK_CLEAN_DAEMON_ISOLATION:-z-old} daemon"' >"$ps_shim"
 chmod +x "$ps_shim"
 lsof_shim="$root/lsof"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "n%s\\n" "$(CDPATH= cd -- "${BUCK_CLEAN_DAEMON_CWD:-$BUCK_CLEAN_PROJECT_ROOT}" && pwd -P)"' >"$lsof_shim"
@@ -57,13 +61,33 @@ test -d "$root/buck-out/z-invalid"
 test -d "$root/buck-out/z-old"
 ! test -d "$root/buck-out/a-new"
 
-# A matching daemon belonging to another project must not protect this cache.
+# A daemon whose cwd is exactly its isolation directory is protected.
+make_cache z-old-exact
+touch -t 202001010000 "$root/buck-out/z-old-exact" "$root/buck-out/z-old-exact/CACHEDIR.TAG"
+: >"$root/old-present"
+BUCK_CLEAN_DAEMON_ISOLATION=z-old-exact BUCK_CLEAN_DAEMON_CWD="$root/buck-out/z-old-exact" PATH="$root:$shim:$PATH" run >/dev/null
+! grep -F -- '--isolation-dir z-old-exact clean' "$action_log"
+test -d "$root/buck-out/z-old-exact"
+
+# A daemon below its isolation directory is protected too.
+make_cache z-old-descendant
+mkdir "$root/buck-out/z-old-descendant/worker"
+touch -t 202001010000 "$root/buck-out/z-old-descendant" "$root/buck-out/z-old-descendant/CACHEDIR.TAG"
+: >"$root/old-present"
+BUCK_CLEAN_DAEMON_ISOLATION=z-old-descendant BUCK_CLEAN_DAEMON_CWD="$root/buck-out/z-old-descendant/worker" PATH="$root:$shim:$PATH" run >/dev/null
+! grep -F -- '--isolation-dir z-old-descendant clean' "$action_log"
+test -d "$root/buck-out/z-old-descendant"
+
+# A similarly prefixed sibling is outside the protected path boundary.
+make_cache z-old-sibling
+touch -t 202001010000 "$root/buck-out/z-old-sibling" "$root/buck-out/z-old-sibling/CACHEDIR.TAG"
 : >"$root/old-present"
 foreign_root=$(mktemp -d "${TMPDIR:-/tmp}/buck-clean-foreign.XXXXXX")
-BUCK_CLEAN_DAEMON_CWD="$foreign_root" PATH="$root:$shim:$PATH" run >/dev/null
+mkdir "$foreign_root/z-old-sibling-extra"
+BUCK_CLEAN_DAEMON_ISOLATION=z-old-sibling BUCK_CLEAN_DAEMON_CWD="$foreign_root/z-old-sibling-extra" PATH="$root:$shim:$PATH" run >/dev/null
 rm -rf "$foreign_root"
-grep -F -- '--isolation-dir z-old clean' "$action_log"
-! test -d "$root/buck-out/z-old"
+grep -F -- '--isolation-dir z-old-sibling clean' "$action_log"
+! test -d "$root/buck-out/z-old-sibling"
 
 for target in 4 11; do
     if BUCK_CLEAN_TARGET_GIB="$target" BUCK_CLEAN_PROJECT_ROOT="$root" BUCK2="$fake_buck" "$script" >/dev/null 2>&1; then
