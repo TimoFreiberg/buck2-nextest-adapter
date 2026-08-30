@@ -38,28 +38,34 @@ fixture in `tools/nextest_cargo_nextest_v1.py:28-56`, and the roadmap state in
 `docs/nextest-buck2-roadmap.md`.
 
 <a id="per-test-isolation-cleanup"></a>
-## Immediate maintenance: clean disposable Buck isolations after each test
+## Deferred experiment: clean disposable Buck isolations after each test
 
-**Purpose and evidence.** Repository tests create uniquely named Buck
-isolations, and those outputs accumulate even though most scenarios will never
-reuse them. The bounded stale-isolation cleaner remains necessary recovery for
-interrupted, crashed, or legacy runs, but it should not be the normal lifecycle.
+**Experiment outcome.** The per-test cleanup implementation was a failed
+cost/complexity experiment and was abandoned. Making it correct required
+owner-specific state and provenance,
+child and process-group quiescence proofs, signal-safe finalizers, exact status
+merging, remote-gate handling, and a large forwarding-proxy contract and CI
+matrix. That machinery was substantially more complex than the operational
+problem it addressed, and it increased the amount of test infrastructure that
+could affect otherwise unrelated repository checks.
 
-**Desired end state.** Every test helper that owns a disposable isolation invokes
-Buck's `clean` for that isolation after its Buck children have exited. A failure
-keeps diagnostics in its private temporary directory while still releasing the
-Buck isolation. A scenario that intentionally reuses an isolation cleans it only
-after its final cache assertion.
+**Current decision.** Do not add per-test finalizers or a shared cleanup library.
+Repository tests may continue to create named disposable isolations, and the
+bounded stale-isolation cleaner remains the supported way to reclaim their
+artifacts after a session, or after an interrupted, crashed, or legacy run. Use
+`just buck-clean-stale`; it preserves the existing protections for default `v2`,
+active runs, malformed state, symlinks, and foreign-owned state.
 
-**Implementation boundaries.** Use `buck2 --isolation-dir <name> clean`; never
-remove Buck output with `rm -rf`. Keep cleanup inside a trap/finalizer that runs
-after child quiescence, preserve `v2` and caller-shared isolations, and retain the
-bounded stale-cleanup command for abandoned directories.
+**Rejected implementation boundary.** The abandoned experiment correctly used
+`buck2 --isolation-dir <name> clean` rather than `rm -rf`, but correctness alone
+did not justify making every owner prove final-use ordering and child
+quiescence. No implementation should be revived by weakening those guarantees
+or by turning cleanup failures into warnings.
 
-**Acceptance evidence.** The relevant test helpers leave no disposable custom
-isolation after successful and expected-failure runs, cache-reuse scenarios
-clean only after their final assertion, and the existing stale-cleanup contract
-continues to cover interrupted or legacy output.
+**Revisit trigger.** Reconsider this only if measured disk pressure or artifact
+growth makes session-level cleanup inadequate, or if Buck provides a simpler
+lifecycle primitive that makes ownership and quiescence observable without a
+large repository-specific test contract.
 
 <a id="freeze-remote-readiness"></a>
 ## 1. Freeze further remote-readiness expansion temporarily

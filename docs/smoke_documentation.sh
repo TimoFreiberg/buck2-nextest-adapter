@@ -130,9 +130,12 @@ done
 for evidence in 'nextest.bzl:206-272' 'adapter/src/bin/nextest_buck_artifact.rs' 'adapter/src/manifest_v1.rs' 'tools/nextest_cargo_nextest_v1.py:28-56' 'docs/nextest-buck2-roadmap.md'; do
     grep -F "$evidence" "$roadmap_follow_ups" >/dev/null
 done
-for heading in '## Architectural invariants' '## Immediate maintenance: clean disposable Buck isolations after each test' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement and prove the selected consumer surface' '## 5. Implement a Rust runner' '## 6. Prove real nextest through the declared production path' '## 7. Support a realistic Buck Rust runtime closure' '## 8. Prove the core nextest value proposition' '## 9. Retire obsolete compatibility surfaces' '## 10. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
+for heading in '## Architectural invariants' '## Deferred experiment: clean disposable Buck isolations after each test' '## 1. Freeze further remote-readiness expansion temporarily' '## 2. Define the primary Buck test surface' '## 3. Generalize the artifact/runtime contract' '## 4. Implement and prove the selected consumer surface' '## 5. Implement a Rust runner' '## 6. Prove real nextest through the declared production path' '## 7. Support a realistic Buck Rust runtime closure' '## 8. Prove the core nextest value proposition' '## 9. Retire obsolete compatibility surfaces' '## 10. Reassess integration and resume remote validation' '### Feature-to-test matrix' '## Quick-cleanup assertion matrix' '## Prioritization'; do
     grep -F "$heading" "$roadmap_follow_ups" >/dev/null
 done
+grep -F '**Current decision.** Do not add per-test finalizers or a shared cleanup library.' "$roadmap_follow_ups" >/dev/null
+grep -F 'It is not implemented or part of the active sequence below' "$roadmap" >/dev/null
+grep -F '`just buck-clean-stale`' "$roadmap_follow_ups" >/dev/null
 for invariant in 'Buck remains authoritative for build artifacts' 'Nextest remains authoritative for test discovery' 'must not invoke Cargo or rustc' 'No source-tree or arbitrary unmanaged `buck-out` writes' 'Fresh test execution must use Buck' 'Preserve exact nextest JUnit bytes' 'Process-tree cleanup, cancellation, and no-orphan behavior' 'Consumer setup should become simpler'; do
     grep -F "$invariant" "$roadmap_follow_ups" >/dev/null
 done

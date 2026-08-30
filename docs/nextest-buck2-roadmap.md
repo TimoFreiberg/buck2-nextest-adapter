@@ -382,15 +382,20 @@ The schema-v2 production vertical slice above is the current-state record. The
 following items remain ordered follow-ups; detailed rationale, boundaries, and
 acceptance evidence live in [`docs/roadmap-follow-ups.md`](roadmap-follow-ups.md).
 
-1. **[Clean disposable Buck isolations after each test](roadmap-follow-ups.md#per-test-isolation-cleanup).** Have test helpers invoke Buck cleanup after their children exit, while retaining the bounded stale-isolation cleaner for interrupted or legacy runs.
-2. **[Preserve the remote-expansion freeze](roadmap-follow-ups.md#freeze-remote-readiness).** Keep the fail-closed gate and blocker evidence without expanding the remote claim before the local consumer path is proved.
-3. **[Establish the provider contract and selected public surface](roadmap-follow-ups.md#primary-buck-test-surface).** Pass `buck2_nextest_rust_provider_compatibility`, then define provider-backed `nextest_test(name, tests = [...])` over existing `rust_test` targets.
-4. **[Prove the consumer surface](roadmap-follow-ups.md#consumer-surface).** Add the cross-package `buck2_nextest_consumer_surface` fixture and its environment, platform/runner, ambient-Cargo, identity, cardinality, defaults, and stock/opt-in report-mode checks.
-5. **[Prove the real declared path](roadmap-follow-ups.md#real-declared-nextest).** Run the actual declared cargo-nextest toolchain through the selected production lifecycle without ambient fallback.
-6. **[Prove the realistic runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed resource proof through the selected provider to shared libraries, build-script outputs, effective environment, and artifact target/runner metadata.
-7. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
-8. **[Retire obsolete compatibility surfaces](roadmap-follow-ups.md#simplify-compatibility).** Make the low-level record rule internal or remove it only after provider-backed behavioral replacements exist; then reassess unnecessary inputs, fault seams, and implementation-pinning tests.
-9. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
+The per-test isolation-cleanup experiment is documented as deferred after a
+failed cost/complexity tradeoff in
+[`roadmap-follow-ups.md#per-test-isolation-cleanup`](roadmap-follow-ups.md#per-test-isolation-cleanup).
+It is not implemented or part of the active sequence below; use the bounded
+stale-isolation cleaner for session-level recovery.
+
+1. **[Preserve the remote-expansion freeze](roadmap-follow-ups.md#freeze-remote-readiness).** Keep the fail-closed gate and blocker evidence without expanding the remote claim before the local consumer path is proved.
+2. **[Establish the provider contract and selected public surface](roadmap-follow-ups.md#primary-buck-test-surface).** Pass `buck2_nextest_rust_provider_compatibility`, then define provider-backed `nextest_test(name, tests = [...])` over existing `rust_test` targets.
+3. **[Prove the consumer surface](roadmap-follow-ups.md#consumer-surface).** Add the cross-package `buck2_nextest_consumer_surface` fixture and its environment, platform/runner, ambient-Cargo, identity, cardinality, defaults, and stock/opt-in report-mode checks.
+4. **[Prove the real declared path](roadmap-follow-ups.md#real-declared-nextest).** Run the actual declared cargo-nextest toolchain through the selected production lifecycle without ambient fallback.
+5. **[Prove the realistic runtime closure](roadmap-follow-ups.md#realistic-rust-runtime-closure).** Extend the completed resource proof through the selected provider to shared libraries, build-script outputs, effective environment, and artifact target/runner metadata.
+6. **[Prove the core nextest value proposition](roadmap-follow-ups.md#core-nextest-value).** Cover retries, groups/concurrency, richer timeout/slowness and capture behavior, ignored-test parity, and realistic runtime dependencies through the production rule and real toolchain.
+7. **[Retire obsolete compatibility surfaces](roadmap-follow-ups.md#simplify-compatibility).** Make the low-level record rule internal or remove it only after provider-backed behavioral replacements exist; then reassess unnecessary inputs, fault seams, and implementation-pinning tests.
+8. **[Reassess the integration and resume remote validation](roadmap-follow-ups.md#reassess-and-resume-remote).** Decide whether the CLI/remap boundary is sufficient and then resume live platform propagation, materialization, failed-result, cache, and broader cancellation validation.
 
 The consumer fixture depends on provider compatibility and realistic runtime
 evidence; ergonomic syntax alone cannot advance production-readiness claims. The
